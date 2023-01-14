@@ -73,8 +73,8 @@ module.exports = function (RED) {
   }
 
   class TasmotaLight extends TasmotaBase {
-    constructor (userConfig) {
-      super(userConfig, RED, LIGHT_DEFAULTS)
+    constructor (config) {
+      super(config, RED, LIGHT_DEFAULTS)
       this.cache = {} // light status cache, es: {on: true, bright:55, ct:153, colors:...}
       this.colorCmnd = 'Color1' // TODO make Color1/2 configurable ?
 
@@ -258,7 +258,8 @@ module.exports = function (RED) {
       let data
       try {
         data = JSON.parse(mqttPayloadBuf.toString())
-      } catch (err) {
+      } 
+      catch (err) {
         this.setNodeStatus('red', 'Error parsing JSON data from device')
         this.error(err, 'Error parsing JSON data from device')
         return

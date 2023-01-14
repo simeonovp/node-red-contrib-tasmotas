@@ -8,8 +8,8 @@ module.exports = function (RED) {
   }
 
   class TasmotaGeneric extends TasmotaBase {
-    constructor (userConfig) {
-      super(userConfig, RED, GENERIC_DEFAULTS)
+    constructor (config) {
+      super(config, RED, GENERIC_DEFAULTS)
 
       // Subscribe to STAT messages (all or just RESULT)
       if (this.config.subscribeToStat) {

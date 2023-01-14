@@ -8,8 +8,8 @@ module.exports = function (RED) {
   }
 
   class TasmotaSensor extends TasmotaBase {
-    constructor (userConfig) {
-      super(userConfig, RED, SENSOR_DEFAULTS)
+    constructor (config) {
+      super(config, RED, SENSOR_DEFAULTS)
 
       // Subscribe to device telemetry changes  tele/<device>/SENSOR
       this.MQTTSubscribe('tele', 'SENSOR', (topic, payload) => {

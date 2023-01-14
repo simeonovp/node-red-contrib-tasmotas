@@ -47,8 +47,8 @@ module.exports = function (RED) {
   ]
 
   class TasmotaShutter extends TasmotaBase {
-    constructor (userConfig) {
-      super(userConfig, RED, SHUTTER_DEFAULTS)
+    constructor (config) {
+      super(config, RED, SHUTTER_DEFAULTS)
       this.shutter = this.deviceNode.shutters[this.config.idx]
     }
 

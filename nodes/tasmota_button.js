@@ -7,8 +7,8 @@ module.exports = function (RED) {
   }
 
   class TasmotaButton extends TasmotaBase {
-    constructor (userConfig) {
-      super(userConfig, RED, BUTTON_DEFAULTS)
+    constructor (config) {
+      super(config, RED, BUTTON_DEFAULTS)
 
       // Subscribes to stat info for all the buttons  stat/<device>/+
       this.MQTTSubscribe('stat', '+', (topic, payload) => {

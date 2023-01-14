@@ -201,24 +201,6 @@ module.exports = function (RED) {
       })
     }
 
-    foo(server, app, log, redSettings) {
-      //see .node-red/node_modules/@node-red/editor-api/lib/editor/index.js
-      managerApp = express()
-      // managerApp.set(...)
-      // managerApp.get(...)
-      // managerApp.post(...)
-      // managerApp.use(...)
-      app.use(managerApp)
-    }
-
-    foo1() {
-      RED.events.on('nodes:change', function(node) { 
-        if ( node.type === 'tasmota-manager') { 
-        }
-        //TODO
-      })
-    }
-
     async initialize(overwrite = false) {
       //download:
       if (!this.config.dbUri) return
@@ -254,6 +236,7 @@ module.exports = function (RED) {
         }
       }); 
       if (mapDirty) fs.createWriteStream(this.mqttMapPath).write(JSON.stringify(this.mqttMap, null, 2));
+      return this.mqttMap
     }
 
     setStatus(status) {
@@ -354,6 +337,27 @@ module.exports = function (RED) {
       db['devices'] = db['devices'] || []
       db['devices'].push({ mac: bssid })
       this.devicesDb.save(true)
+    }
+
+    getDbDevices() {
+      return this.devicesDb.data && this.devicesDb.data['devices']
+    }
+
+    async httpCommand(ip, cmnd, val) {
+      const url = `http://${ip}/cm?cmnd=${cmnd}` + (val && (' ' + val) || '')
+      //this.log('-- httpCommand url:' + url)
+      return await new Promise((resolve, reject) => {
+        request(url, { json: true }, (err, resp, data) => {
+          //this.log('-- request callback err:' + err)
+          if (err || (resp && resp.statusCode >= 400) || !data) {
+            console.warn('Failed to get ' + url)
+            reject (err ? err : resp.statusCode)
+            this.downloadPending = false
+            return;
+          }
+          resolve(data)
+        });
+      });
     }
   }
 

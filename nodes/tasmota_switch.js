@@ -9,8 +9,8 @@ module.exports = function (RED) {
   }
 
   class TasmotaSwitch extends TasmotaBase {
-    constructor (userConfig) {
-      super(userConfig, RED, SWITCH_DEFAULTS)
+    constructor (config) {
+      super(config, RED, SWITCH_DEFAULTS)
       this.switch = this.deviceNode.swiches[this.config.idx]
       if (this.config.supportPulseTime) this.switch.supportPulseTime = true
     }
