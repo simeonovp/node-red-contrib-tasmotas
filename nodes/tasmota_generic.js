@@ -33,7 +33,8 @@ module.exports = function (RED) {
       let payload = ''
       try {
         payload = JSON.parse(payloadBuf.toString())
-      } catch (e) {
+      } 
+      catch (err) {
         return // ignore any non-json payload
       }
 

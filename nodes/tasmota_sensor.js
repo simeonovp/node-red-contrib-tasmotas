@@ -64,7 +64,8 @@ module.exports = function (RED) {
       try {
         const data = JSON.parse(payload.toString())
         this.sendToOutputs(data)
-      } catch (err) {
+      } 
+      catch (err) {
         this.setNodeStatus('red', 'Error parsing JSON data from device')
         this.error(err, 'Error parsing JSON data from device')
       }
@@ -74,9 +75,10 @@ module.exports = function (RED) {
       try {
         const data = JSON.parse(payload.toString())
         this.sendToOutputs(data.StatusSNS)
-      } catch (e) {
+      } 
+      catch (err) {
         this.setNodeStatus('red', 'Error parsing JSON data from device')
-        this.error(e, 'Error parsing JSON data from device')
+        this.error(err, 'Error parsing JSON data from device')
       }
     }
   }

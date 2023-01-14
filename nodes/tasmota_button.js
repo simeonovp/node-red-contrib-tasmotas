@@ -23,7 +23,8 @@ module.exports = function (RED) {
       const lastTopic = mqttTopic.split('/').pop()
       try {
         payload = JSON.parse(mqttPayloadBuf.toString())
-      } catch (e) {
+      }
+      catch (err) {
         return // ignore any non-json payload
       }
 

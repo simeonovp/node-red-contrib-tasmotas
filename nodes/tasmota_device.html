@@ -315,6 +315,13 @@
     }
   })
 
+  function get(url) {
+    const Httpreq = new XMLHttpRequest() // a new request
+    Httpreq.open('GET',url,false)
+    Httpreq.send(null)
+    return Httpreq.responseText
+  }
+
   function getDevices() {
     const resp = get(`resources/node-red-contrib-tasmota/devices.json`)
     return resp && (resp[0] == '{') && JSON.parse(resp)

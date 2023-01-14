@@ -18,65 +18,6 @@
 </script>
 
 <script type="text/javascript">
-  const context = {
-    dbSet: {},
-    addConfigNode: function (type, obj) {
-      const _def = RED.nodes.getType(type)
-      if (!_def) return console.error(`Config node type '${type}' not registered`)
-      const id = RED.nodes.id()
-      let y = { id, _def, type, z: '', users: [] }
-      for (let o in y, _def.defaults) {
-        _def.defaults[o].value && (y[o] = JSON.parse(JSON.stringify(_def.defaults[o].value)))
-      }
-      console.log(`Add new ${type} node (${JSON.stringify(obj)})`)
-      const e = obj ? {...y, ...obj} : y
-      RED.nodes.add(e)
-    },
-
-    updateConfigNode: function (node, type, obj) {
-      if (node) {
-        for (let key in obj) {
-          if (Array.isArray(obj[key])) {
-            if (node[key] && !Array.isArray(node[key])) continue
-            if (JSON.stringify(node[key]) !== JSON.stringify(obj[key])) {
-              console.warn(`Change config (type:${type}, node:${node.name}) node property '${key}' (${JSON.stringify(node[key])} -> ${JSON.stringify(obj[key])})`)
-              node[key] = obj[key]
-            }
-          }
-          else if (node[key] !== obj[key]) {
-            console.warn(`Change config (type:${type}, node:${node.name}) node property '${key}' (${JSON.stringify(node[key])} -> ${JSON.stringify(obj[key])})`)
-            node[key] = obj[key]
-          }
-        }
-      }
-      else SIP.addConfigNode(type, obj)
-    },
-
-    getConfigIdsWithType: function (type) {
-      const re = []
-      return (RED.nodes.eachConfig(n => { if (n.type === type) re.push(n.id) }), re)
-    },
-
-    removeConfigNodes: function (type) {
-      const re = SIP.getConfigIdsWithType(type)
-      re.length && console.log(`Remove all ${re.length} config nodes of type '${type}'`)
-      for (let id of re) {
-        console.log(`Remove node id:'${id}'`)
-        RED.nodes.remove(id)
-      }
-    },
-
-    findConfigByTypeIdx: function (type, idx) {
-      let m
-      return (RED.nodes.eachConfig(n => (m = (n.type === type) && (n.index == idx) && n, !m)), m)
-    },
-
-    findFirstNodeByType: function (type) {
-      let m
-      return (RED.nodes.eachNode(n => (m = n, !(n.type === type))), m)
-    }
-  }
-
   RED.nodes.registerType('tasmota-manager', {
     category: 'config',
     defaults: {

@@ -1,4 +1,4 @@
-<script type="text/html" data-template-name="tasmota-button">
+<script type="text/html" data-template-name="tasmota-config">
   <div class="form-row">
     <label for="node-input-manager"><i class="fa fa-globe"></i> Project</label>
     <input type="text" id="node-input-manager">
@@ -9,11 +9,11 @@
   </div>
 </script>
 
-<script type="text/html" data-help-name="tasmota-button">
+<script type="text/html" data-help-name="tasmota-config">
 </script>
 
 <script type="text/javascript">
-  RED.nodes.registerType('tasmota-button', {
+  RED.nodes.registerType('tasmota-config', {
     category: 'tasmota',
     color: '#10AF80',
     defaults: {
@@ -21,7 +21,7 @@
       name: { value: '' }
     },
     icon: 'tasmota-config.svg',
-    paletteLabel: 'Button',
+    paletteLabel: 'Config',
     inputs: 0,
     outputs: 1,
     label: function () {
