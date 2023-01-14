@@ -1,0 +1,140 @@
+<script type="text/html" data-template-name="tasmota-mqtt-broker">
+  <div class="form-row">
+    <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-config-input-name" placeholder="Name">
+  </div>
+  <div class="form-row node-input-broker">
+    <label for="node-config-input-broker"><i class="fa fa-globe"></i> Address</label>
+    <input type="text" id="node-config-input-broker" style="width:40%;" placeholder="e.g. localhost">
+    <label for="node-config-input-port" style="margin-left:20px; width:43px; "> Port</label>
+    <input type="text" id="node-config-input-port" placeholder="1883" style="width:55px">
+  </div>
+  <div class="form-row">
+    <input type="checkbox" id="node-config-input-usetls" style="display: inline-block; width: auto; vertical-align: top;">
+    <label for="node-config-input-usetls" style="width: auto">Enable secure (SSL/TLS) connection</label>
+    <div id="node-config-row-tls" class="hide">
+      <label style="width: auto; margin-left: 20px; margin-right: 10px;" for="node-config-input-tls">TLS Configuration</label>
+      <input style="width: 300px;" type="text" id="node-config-input-tls">
+    </div>
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-clientid"><i class="fa fa-tag"></i> Client ID</label>
+    <input type="text" id="node-config-input-clientid" placeholder="Leave blank for auto generated">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-user"><i class="fa fa-user"></i> Username</label>
+    <input type="text" id="node-config-input-user">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-password"><i class="fa fa-lock"></i> Password</label>
+    <input type="password" id="node-config-input-password">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-keepalive" style="width: auto"><i class="fa fa-clock-o"></i> Keep alive time (s)</label>
+    <input type="text" id="node-config-input-keepalive" style="width: 50px">
+    <input type="checkbox" id="node-config-input-cleansession" style="margin-left: 30px; height: 1em;display: inline-block; width: auto; vertical-align: middle;">
+    <label for="node-config-input-cleansession" style="width: auto;">Use clean session</label>
+  </div>
+</script>
+
+<script type="text/html" data-help-name="tasmota-mqtt-broker">
+  <p>Configuration for a connection to an MQTT broker.</p>
+  <p>This configuration will create a single connection to the broker which can
+    then be reused by the other nodes.</p>
+  <h4>Address</h4>
+  <p>Can be an ip address (eg. 192.168.1.170), a name (eg. localhost) or a full
+    url (eg. mqtt://example.com:4000) </p>
+  <h4>Client ID</h4>
+  <p>The node will generate a random Client ID if one is not set and the
+    node is configured to use a Clean Session connection. If a Client ID is set,
+    it must be unique to the broker you are connecting to.</p>
+  <h4>WebSockets</h4>
+  <p>The node can be configured to use a WebSocket connection. To do so, the Server
+    field should be configured with a full URI for the connection. For example:</p>
+  <pre>ws://example.com:4000/mqtt</pre>
+</script>
+
+<script type="text/javascript">
+  RED.nodes.registerType('tasmota-mqtt-broker',{
+    category: 'config',
+    defaults: {
+      name: {value: ''},
+      broker: {value: '', required: true},
+      port: {value: 1883, required: true, validate: RED.validators.number()},
+      tls: {type:'tls-config', required: false},
+      clientid: {value: '', validate: function(v) {
+          if ($('#node-config-input-clientid').length) {
+            return $('#node-config-input-cleansession').is(':checked') || (v||'').length > 0
+          } 
+          else {
+            return (this.cleansession===undefined || this.cleansession) || (v||'').length > 0
+          }
+        }},
+      usetls: {value: false},
+      verifyservercert: { value: false},
+      keepalive: {value: 60, validate: RED.validators.number()},
+      cleansession: {value: true},
+    },
+    credentials: {
+      user: {type: 'text'},
+      password: {type: 'password'}
+    },
+    label: function() {
+      if (this.name) {
+        return this.name
+      }
+      let b = this.broker
+      if (!b) { b = 'undefined' }
+      let lab = (this.clientid ? this.clientid+'@' : '') + b
+      if (b.indexOf('://') === -1){
+        if (!this.port){ lab = lab + ':1883' }
+        else { lab = lab + ':' + this.port }
+      }
+      return lab
+    },
+    oneditprepare: function () {
+      if (typeof this.cleansession === 'undefined') {
+        this.cleansession = true
+        $('#node-config-input-cleansession').prop('checked', true)
+      }
+      if (typeof this.usetls === 'undefined') {
+        this.usetls = false
+        $('#node-config-input-usetls').prop('checked', false)
+      }
+      if (typeof this.keepalive === 'undefined') {
+        this.keepalive = 60
+        $('#node-config-input-keepalive').val(this.keepalive)
+      }
+
+      function updateTLSOptions() {
+        if ($('#node-config-input-usetls').is(':checked')) {
+          $('#node-config-row-tls').show()
+        } else {
+          $('#node-config-row-tls').hide()
+        }
+      }
+      updateTLSOptions()
+      $('#node-config-input-usetls').on('click',function() {
+        updateTLSOptions()
+      })
+
+      function updateClientId() {
+        if ($('#node-config-input-cleansession').is(':checked')) {
+          $('#node-config-input-clientid').attr('placeholder', 'Leave blank for auto generated')
+        } else {
+          $('#node-config-input-clientid').attr('placeholder', 'Must be set for non-clean sessions')
+        }
+        $('#node-config-input-clientid').change()
+      }
+      setTimeout(updateClientId,0)
+      $('#node-config-input-cleansession').on('click',function() {
+        updateClientId()
+      })
+    },
+    oneditsave: function() {
+      if (!$('#node-config-input-usetls').is(':checked')) {
+        $('#node-config-input-tls').val('')
+      }
+    }
+  })
+</script>

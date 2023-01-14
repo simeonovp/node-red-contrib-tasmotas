@@ -1,0 +1,227 @@
+<script type="text/html" data-template-name="tasmota-light">
+  <div class="form-row">
+    <label for="node-input-device"><i class="fa fa-dot-circle-o"></i> Device</label>
+    <input type="text" id="node-input-device">
+  </div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name">
+  </div>
+  <div class="form-row">
+    <label for="node-input-uidisabler"><i class="fa fa-bar-chart"></i> Dashboard</label>
+    <label for="node-input-uidisabler" style="width:70%">
+      <input type="checkbox" id="node-input-uidisabler" style="display:inline-block; width:22px; vertical-align:baseline;">
+      Send enable/disable message
+    </label>
+  </div>
+  <hr>
+  <div class="form-row">
+    <label for="node-input-sendDevice" style="width:70%">
+      <input type="checkbox" id="node-input-sendDevice" style="display:inline-block; width:15px; vertical-align:baseline;">
+      Send device name
+    </label>
+  </div>
+  <div class="form-row">
+    <label for="node-input-havedimmer"><i class="fa fa-lightbulb-o"></i> Light features</label>
+    <label for="node-input-havedimmer" style="width:70%">
+      <input type="checkbox" id="node-input-havedimmer" style="display:inline-block; width:22px; vertical-align:baseline;">
+      Dimmerable
+    </label>
+  </div>
+  <div class="form-row">
+    <label for="node-input-havetemp"> </label>
+    <label for="node-input-havetemp" style="width:70%">
+      <input type="checkbox" id="node-input-havetemp" style="display:inline-block; width:22px; vertical-align:baseline;">
+      Color Temperature
+    </label>
+  </div>
+  <div class="form-row">
+    <label for="node-input-havecolors"> </label>
+    <label for="node-input-havecolors" style="width:70%">
+      <input type="checkbox" id="node-input-havecolors" style="display:inline-block; width:22px; vertical-align:baseline;">
+      Colors
+    </label>
+  </div>
+  <div class="form-row">
+    <label for="node-input-outputs"><i class="fa fa-random"></i> Outputs</label>
+    <select id="node-input-outputs">
+      <option value="1">Single output (json object)</option>
+      <option value="2">State, Dimmer</option>
+      <option value="3">State, Dimmer, Temp</option>
+      <option value="4">State, Dimmer, Temp, Colors</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="node-input-tempformat"><i class="fa fa-thermometer-half"></i> Temperature</label>
+    <select id="node-input-tempformat">
+      <option value="" selected disabled hidden>Kelvin (2000-6500)</option>
+      <option value="K">Kelvin (2000-6500)</option>
+      <option value="M">Mired (500-153)</option>
+      <option value="P">Percent (0-100)</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="node-input-colorsformat"><i class="fa fa-sliders"></i> Colors</label>
+    <select id="node-input-colorsformat">
+      <option value="" selected disabled hidden>HSB</option>
+      <option value="HSB">HSB [0-360, 0-100, 0-100]</option>
+      <option value="RGB">RGB [0-255, 0-255, 0-255]</option>
+      <option value="CHS">Channels [0-100, 0-100, 0-100]</option>
+    </select>
+  </div>
+</script>
+
+<script type="text/html" data-help-name="tasmota-light">
+  <p>Support a <b>Light Bulb/Controller</b> device running the <b>Tasmota</b> firmware.</p>
+
+  <h3>Input (simple mode)</h3>
+  <dl class="message-properties">
+    <dt>payload <span class="property-type">boolean | int | string</span></dt>
+    <dd>
+      <code>true</code>/<code>false</code>, <code>1</code>/<code>0</code>,
+      <code>on</code>/<code>off</code> will turn On or Off the light,
+      <code>toggle</code> will change the on/off state of the light.
+    </dd>
+    <dt>topic <span class="property-type">null</span></dt>
+    <dd>
+      topic must be empty in simple mode.
+    </dd>
+  </dl>
+
+  <h3>Input commands</h3>
+  <dl class="message-properties">
+    <dt>on (alias:state,power)<span class="property-type">boolean | int | string</span></dt>
+    <dd>
+      <code>true</code>/<code>false</code>, <code>1</code>/<code>0</code>,
+      <code>on</code>/<code>off</code> will turn On or Off the light,
+      <code>toggle</code> will change the on/off state of the light.
+    </dd>
+    <dt>bright (alias:brightness,dimmer)<span class="property-type">int</span></dt>
+    <dd>
+      change the light brightness, range from 0 to 100.
+    </dd>
+    <dt>ct (alias:ColorTemp)<span class="property-type">int</span></dt>
+    <dd>
+      color temperature, values (from warm to cold) can be expressed
+      in Mired (500-153), Kelvin(2000-6500) or percent(0-100).
+    </dd>
+    <dt>rgb (alias:RGBColor)<span class="property-type">int array | string</span></dt>
+    <dd>
+      change the RGB colors of the light, can be a string: "255,0,0" (for red)
+      or an array of int: [255, 0, 0]
+    </dd>
+    <dt>hsb (alias:HSBColor)<span class="property-type">int array | string</span></dt>
+    <dd>
+      change the HSB values, like rgb can be a string or an array.
+      Ranges are: 0-360, 0-100, 0-100.
+    </dd>
+    <dt>hex (alias:HEXColor)<span class="property-type">string</span></dt>
+    <dd>
+      hexadecimal color notation: <code>#CWWW</code>, <code>#RRGGBB</code>,
+      <code>#RRGGBBWW</code> or <code>#RRGGBBCWWW</code> (with or without the starting <code>#</code>).
+    </dd>
+    <dt>color<span class="property-type">string</span></dt>
+    <dd>
+      can be <code>red</code>, <code>green</code>, <code>blue</code>, <code>orange</code>, <code>lightgreen</code>,
+      <code>lightblue</code>, <code>amber</code>, <code>cyan</code>, <code>purple</code>, <code>yellow</code>,
+      <code>pink</code>, <code>white</code>, or <code>+</code>/<code>-</code> to switch to next/previous color.
+    </dd>
+  </dl>
+
+  <h3>Input (topic mode)</h3>
+  Commands from the table below can be issued by sending them as msg.topic
+  and the wanted value as msg.payload.
+  <dl class="message-properties">
+    <dt>topic<span class="property-type">string</span></dt>
+    <dd>
+      any of the supported commands, ex: <code>on</code>, <code>bright</code>, etc...
+    </dd>
+    <dt>payload <span class="property-type">Any</span></dt>
+    <dd>
+      each command accept a different payload type/format, follow the  table below for reference.
+    </dd>
+  </dl>
+
+  <h3>Input (object mode)</h3>
+  To change more than one attribute at the same time you can send a js object
+  in msg.payload. Object keys are the commands to execute
+  <dl class="message-properties">
+    <dt>payload <span class="property-type">object</span></dt>
+    <dd>
+      es: {"on": true, "bright": 75, "color": "red"}<br>
+      follow the table below to see all the supported commands and formats.
+    </dd>
+    <dt>topic <span class="property-type">null</span></dt>
+    <dd>
+      topic must be empty in object mode.
+    </dd>
+  </dl>
+
+  <h3>Outputs</h3>
+  <dl class="message-properties">
+    <dt>payload <span class="property-type">object</span></dt>
+    <dd>
+      the node will send an object in the format:
+      {"on":true/false, "bright":62, "ct": ..., "color": ...}.
+      <code>ct</code> and <code>color</code> can be configured to the format you like.
+      You can also configure the node to have up to 4 outputs, one for each
+      of the values.
+    </dd>
+  </dl>
+
+  <h3>Details</h3>
+  <p>This node manage the light functionality of the device.</p>
+  <p>To combine more functionality from the same device (switch, sensor, etc..)
+  use more than one node on the same device.</p>
+  <p>In the Avanced tab you can customize the topic format for special cases,
+  the default values should work for a default Tasmota installation.</p>
+  <p>Input messagges are NOT forwarded to the output.</p>
+</script>
+
+<script type="text/javascript">
+  RED.nodes.registerType('tasmota-light', {
+    category: 'tasmota',
+    color: '#10AF80',
+    defaults: {
+      // inherited from tasmota-base
+      device: { type: 'tasmota-device', required: true },
+      name: { value: '' },
+      outputs: { value: 1 },
+      sendDevice: { value: true },
+      uidisabler: { value: false },
+      // node specific
+      havedimmer: { value: true },
+      havetemp: { value: false },
+      havecolors: { value: false },
+      tempformat: { value: 'K' },
+      colorsformat: { value: 'HSB' }
+    },
+    icon: 'tasmota-light.svg',
+    paletteLabel: 'Light',
+    inputs: 1,
+    outputs: 1,
+    label: function () {
+      return this.name || RED.nodes.node(this.device)?.device || 'Tasmota Light'
+    },
+    labelStyle: function () {
+      return this.name ? 'node_label_italic' : ''
+    },
+    outputLabels: function (index) {
+      if (this.outputs > 1) {
+        switch (index) {
+          case 0: return 'On/Off state'
+          case 1: return 'Brightness'
+          case 2: return 'Temperature'
+          case 3: return 'Colors'
+        }
+      }
+    },
+    oneditprepare: function () {
+      if (!this.device) $('#node-input-device').val('_ADD_')
+      $('#node-input-name').attr('placeholder', $('#node-input-device option:selected').text())
+      $('#node-input-device').on('change', function () {
+        $('#node-input-name').attr('placeholder', $('#node-input-device option:selected').text())
+      })
+    }
+  })
+</script>

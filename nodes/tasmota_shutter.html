@@ -1,0 +1,116 @@
+<script type="text/html" data-template-name="tasmota-shutter">
+  <div class="form-row">
+    <label for="node-input-device"><i class="fa fa-dot-circle-o"></i> Device</label>
+    <input type="text" id="node-input-device">
+  </div>
+  <div class="form-row">
+  <label for="node-input-idx"><i class="fa fa-random"></i> Channel</label>
+  <select id="node-input-idx">
+    <option value="0">1</option>
+    <option value="1">2</option>
+    <option value="2">3</option>
+    <option value="3">4</option>
+  </select>
+  </div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name">
+  </div>
+  <div class="form-row">
+    <label for="node-input-uidisabler"><i class="fa fa-bar-chart"></i> Dashboard</label>
+    <label for="node-input-uidisabler" style="width:70%">
+      <input type="checkbox" id="node-input-uidisabler" style="display:inline-block; width:22px; vertical-align:baseline;">
+      Send enable/disable message
+    </label>
+  </div>
+  <hr>
+  <div class="form-row">
+    <label for="node-input-sendDevice" style="width:70%">
+      <input type="checkbox" id="node-input-sendDevice" style="display:inline-block; width:15px; vertical-align:baseline;">
+      Send device name
+    </label>
+  </div>
+  <div class="form-row">
+    <label for="node-input-swapSwitches" style="width:70%">
+      <input type="checkbox" id="node-input-swapSwitches" style="display:inline-block; width:15px; vertical-align:baseline;">
+      Swap switches
+    </label>
+  </div>
+</script>
+
+<script type="text/html" data-help-name="tasmota-shutter">
+  <p>Connect a <b>Shutter</b> device running the <b>Tasmota</b> firmware.</p>
+
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt>payload <span class="property-type">boolean | int | string</span></dt>
+    <dd><code>true</code>/<code>false</code>, <code>1</code>/<code>0</code>
+    or <code>on</code>/<code>off</code> will turn On or Off the switch,
+    <code>toggle</code> will change the state of the switch.</dd>
+
+    <dt>topic <span class="property-type">string</span></dt>
+    <dd>topic is used to control a specific switch in a multi channels
+    device. <code>switchN</code> to act on the Nth channel, <code>switch0</code>
+    to act all the switch toghether, an empty topic will default to the
+    first channel.</dd>
+  </dl>
+
+  <h3>Outputs</h3>
+  <dl class="message-properties">
+    <dt>payload <span class="property-type">boolean</span></dt>
+    <dd>a <code>true</code>/<code>false</code> value is sent on every state
+    change of the switch.</dd>
+    <dt>topic <span class="property-type">string</span></dt>
+    <dd>is used to identify the switch in a multi channels device,
+    es: <code>switch2</code> is the second channel.</dd>
+  </dl>
+  <h3>Details</h3>
+  <p>This node manage the switch functionality of the device.</p>
+  <p>To combine more functionality from the same device (switch, sensor, etc..)
+  use more than one node on the same device.</p>
+  <p>Multi channels device can work in two different modes: if the number of
+  channels is given in configuration then the node will have N outputs and
+  will send state changes to the correct output, otherwise (channels=1) all
+  messages will be sent to the single output with different topics.</p>
+  <p>In the Avanced tab you can customize the topic format for special cases,
+  the default values should work for a default Tasmota installation.</p>
+  <p>Input messagges are NOT forwarded to the output.</p>
+</script>
+
+<script type="text/javascript">
+  RED.nodes.registerType('tasmota-shutter', {
+    category: 'tasmota',
+    color: '#10AF80',
+    defaults: {
+      // inherited from tasmota-base
+      device: { type: 'tasmota-device', required: true },
+      name: { value: '' },
+      outputs: { value: 1 },
+      sendDevice: { value: true },
+      uidisabler: { value: false },
+      // node specific
+      idx: { value: '0' },
+      swapSwitches: { value: false },
+    },
+    icon: 'tasmota-shutter.svg',
+    paletteLabel: 'Shutter',
+    inputs: 1,
+    outputs: 1,
+    label: function() {
+      return this.name || (RED.nodes.node(this.device) && (`${RED.nodes.node(this.device).device}_${parseInt(this.idx) + 1}`)) || 'Tasmota Shutter'
+    },
+    labelStyle: function() {
+      return this.name ? 'node_label_italic' : ''
+    },
+    oneditprepare: function () {
+      if (!this.device) $('#node-input-device').val('_ADD_')
+      if (!this.idx) $('#node-input-idx').val('0')
+      const updateName = () => {
+        $('#node-input-name').attr('placeholder', $('#node-input-device option:selected').text() + '_' + $('#node-input-idx option:selected').text())
+      }
+      updateName()
+      $('#node-input-device').on('change', updateName)
+      $('#node-input-idx').on('change', updateName)
+    }
+  })
+</script>

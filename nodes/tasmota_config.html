@@ -1,0 +1,36 @@
+<script type="text/html" data-template-name="tasmota-button">
+  <div class="form-row">
+    <label for="node-input-manager"><i class="fa fa-globe"></i> Project</label>
+    <input type="text" id="node-input-manager">
+  </div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="tasmota-button">
+</script>
+
+<script type="text/javascript">
+  RED.nodes.registerType('tasmota-button', {
+    category: 'tasmota',
+    color: '#10AF80',
+    defaults: {
+      manager: { type: 'tasmota-manager', required: false },
+      name: { value: '' }
+    },
+    icon: 'tasmota-config.svg',
+    paletteLabel: 'Button',
+    inputs: 0,
+    outputs: 1,
+    label: function () {
+      return this.name || RED.nodes.node(this.device)?.device || 'Config'
+    },
+    labelStyle: function () {
+      return this.name ? 'node_label_italic' : ''
+    },
+    oneditprepare: function () {
+    }
+  })
+</script>

@@ -1,0 +1,144 @@
+<script type="text/html" data-template-name="tasmota-sensor">
+  <div class="form-row">
+    <label for="node-input-device"><i class="fa fa-dot-circle-o"></i> Device</label>
+    <input type="text" id="node-input-device">
+  </div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name">
+  </div>
+  <div class="form-row">
+    <label for="node-input-uidisabler"><i class="fa fa-bar-chart"></i> Dashboard</label>
+    <label for="node-input-uidisabler" style="width:70%">
+      <input type="checkbox" id="node-input-uidisabler"
+        style="display:inline-block; width:22px; vertical-align:baseline;">
+      Send enable/disable message
+    </label>
+  </div>
+  <hr>
+  <div class="form-row">
+    <label for="node-input-sendDevice" style="width:70%">
+      <input type="checkbox" id="node-input-sendDevice"
+        style="display:inline-block; width:15px; vertical-align:baseline;">
+      Send device name
+    </label>
+  </div>
+  <div class="form-row">
+    <label for="node-input-outputTopic"><i class="fa fa-tag"></i> Topic</label>
+    <input type="text" id="node-input-outputTopic" placeholder="Set the topic for output messages">
+  </div>
+  <label for="node-input-rule-container">Output channels payload:</label>
+  <div class="form-row node-input-rule-container-row">
+    <input type="hidden" id="node-input-outputs">
+    <ol id="node-input-rule-container"></ol>
+  </div>
+</script>
+
+<script type="text/html" data-help-name="tasmota-sensor">
+  <p>Connect a <b>Sensor</b> device running the <b>Tasmota</b> firmware.</p>
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt>payload <span class="property-type">any</span></dt>
+    <dd>any input received will trigger a sensor data request to the device.</dd>
+  </dl>
+  <h3>Outputs</h3>
+  <dl class="message-properties">
+    <dt>payload <span class="property-type">object</span></dt>
+    <dd>the complete JSON object as received from the Tasmota device. Unless
+    you have configured outputs using JSONata expressions.</dd>
+  </dl>
+  <h3>Details</h3>
+  <p>This node read sensors data from the device.<p>
+  <p>To combine more functionality from the same device (switch, sensor, etc..)
+  use more than one node connected to the same device.</p>
+  <p>Values are published as output on every telemetry messagge received from
+  the device. </p>
+  <p>Number of outputs can be configured, for each channel an expression
+  must be given and is used to extract a piece of value,
+  ex: <code>AM2301.Temperature</code>. Complex objects can also be created
+  using JSONata expressions.<p>
+  <p>Any messagge received in input will trigger a fresh-value-request
+  to the device, thus you can easily attach a repeating injection to receive
+  the sensor data at an higher frequency than the normal Tasmota telemetry
+  configuration.</p>
+  <p>In the Avanced tab you can customize the topic format for special cases,
+  the default values should work for a default Tasmota installation.</p>
+  <p>Input messagges are NOT forwarded to the output.</p>
+</script>
+
+<script type="text/javascript">
+  RED.nodes.registerType('tasmota-sensor', {
+    category: 'tasmota',
+    color: '#10AF80',
+    defaults: {
+      // inherited from tasmota-base
+      device: { type: 'tasmota-device', required: true },
+      name: { value: '' },
+      outputs: { value: 1 },
+      sendDevice: { value: true },
+      uidisabler: { value: false },
+      // node specific
+      rules: { value:[] },
+      outputTopic: { value: '' }
+    },
+    icon: 'tasmota-sensor.svg',
+    paletteLabel: 'Sensor',
+    inputs: 1,
+    outputs: 1,
+    label: function() {
+      return this.name || RED.nodes.node(this.device)?.device || 'Tasmota Sensor'
+    },
+    labelStyle: function() {
+      return this.name ? 'node_label_italic' : ''
+    },
+    oneditprepare: function () {
+      if (!this.device) $('#node-input-device').val('_ADD_')
+      $('#node-input-name').attr('placeholder', $('#node-input-device option:selected').text())
+      $('#node-input-device').on('change', function() {
+        $('#node-input-name').attr('placeholder', $('#node-input-device option:selected').text())
+      })
+      // initialize editable list
+      $('#node-input-rule-container').css('min-height','250px').editableList({
+        sortable: true,
+        removable: true,
+        addItem: function(container, i, opt) {
+          const rule = opt.r
+          const row = $('<div/>').appendTo(container)
+          const tinput = $('<input/>', {class:'node-input-rule-exp-value',
+            type:'text', style:'width:90%;'})
+            .val(rule).appendTo(row)
+            .typedInput({default:'jsonata', types:['jsonata']})
+          const finalspan = $('<span/>',{style:'float: right;margin-top: 6px;'}).appendTo(row)
+          finalspan.append(' &#8594; <span class='node-input-rule-index'>'+(i+1)+'</span> ')
+        },
+        sortItems: function(rules) {
+          const items = $('#node-input-rule-container').editableList('items')
+          items.each(function(i) {
+            $(this).find('.node-input-rule-index').html(i + 1)
+          })
+        },
+        removeItem: function(opt) {
+          const items = $('#node-input-rule-container').editableList('items')
+          items.each(function(i) {
+            $(this).find('.node-input-rule-index').html(i + 1)
+          })
+        },
+      })
+      // populate editable list
+      for (let i = 0; i < this.rules.length; i++) {
+        const rule = this.rules[i]
+        $('#node-input-rule-container').editableList('addItem', {r: rule, i: i})
+      }
+    },
+    oneditsave: function() {
+      const items = $('#node-input-rule-container').editableList('items')
+      const node = this
+      node.rules = []
+      items.each(function(i) {
+        const rule = $(this).find('.node-input-rule-exp-value').typedInput('value')
+        node.rules.push(rule)
+      })
+      $('#node-input-outputs').val(node.rules.length || 1)
+    }
+  })
+</script>

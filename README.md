@@ -1,4 +1,4 @@
-# node-red-contrib-tasmota
+# node-red-contrib-tasmotas
 
 Support for Tasmota devices in SmartHome projects using [Node-RED](https://nodered.org/).
 

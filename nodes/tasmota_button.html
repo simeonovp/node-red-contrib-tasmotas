@@ -1,0 +1,96 @@
+<script type="text/html" data-template-name="tasmota-button">
+  <div class="form-row">
+    <label for="node-input-device"><i class="fa fa-dot-circle-o"></i> Device</label>
+    <input type="text" id="node-input-device">
+  </div>
+  <div class="form-row">
+    <label for="node-input-idx"><i class="fa fa-random"></i> Channel</label>
+    <select id="node-input-idx">
+      <option value="0">1</option>
+      <option value="1">2</option>
+      <option value="2">3</option>
+      <option value="3">4</option>
+      <option value="4">5</option>
+      <option value="5">6</option>
+      <option value="6">7</option>
+      <option value="7">8</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name">
+  </div>
+  <hr>
+  <div class="form-row">
+    <label for="node-input-sendDevice" style="width:70%">
+      <input type="checkbox" id="node-input-sendDevice" style="display:inline-block; width:15px; vertical-align:baseline;">
+      Send device name
+    </label>
+  </div>
+</script>
+
+<script type="text/html" data-help-name="tasmota-button">
+  <p>Connect a <b>Button</b> device running the <b>Tasmota</b> firmware.</p>
+
+  <h3>Outputs</h3>
+  <dl class="message-properties">
+    <dt>payload <span class="property-type">string</span></dt>
+    <dd>the action performed by the button, <code>SINGLE</code>,
+    <code>DOUBLE</code>, <code>HOLD</code>, etc...</dd>
+    <dt>topic <span class="property-type">string</span></dt>
+    <dd>is used to identify the pressed button in a multi channels device,
+    es: <code>button2</code> is the second button.</dd>
+  </dl>
+  <h3>Details</h3>
+  <p>This node manage the button functionality of the device. NOTE: The input
+  channels in Tasmota must be set as Button, not Switch.</p>
+  <p>To combine more functionality from the same device (switch, sensor, etc..)
+  use more than one node on the same device.</p>
+  <p>Multi channels device can work in two different modes: if the number of
+  channels is given in configuration then the node will have N outputs and
+  will send button actions to the correct output, otherwise (channels=1) all
+  messages will be sent to the single output with different topics.</p>
+  <p>In the Avanced tab you can customize the topic format for special cases,
+  the default values should work for a default Tasmota installation.</p>
+</script>
+
+<script type="text/javascript">
+  RED.nodes.registerType('tasmota-button', {
+    category: 'tasmota',
+    color: '#10AF80',
+    defaults: {
+      // inherited from tasmota-base
+      device: { type: 'tasmota-device', required: true },
+      name: { value: '' },
+      outputs: { value: 1 },
+      sendDevice: { value: true },
+      uidisabler: { value: false },
+      // node specific
+      idx: { value: '0' },
+    },
+    icon: 'tasmota-button.svg',
+    paletteLabel: 'Button',
+    inputs: 0,
+    outputs: 1,
+    label: function() {
+      return this.name || RED.nodes.node(this.device)?.device || 'Button'
+    },
+    labelStyle: function() {
+      return this.name ? 'node_label_italic' : ''
+    },
+    oneditprepare: function () {
+      if (!this.device) $('#node-input-device').val('_ADD_')
+      $('#node-input-name').attr('placeholder', $('#node-input-device option:selected').text())
+      $('#node-input-device').on('change', function() {
+        $('#node-input-name').attr('placeholder', $('#node-input-device option:selected').text())
+      })
+    },
+    button: {
+      enabled: function () {
+        return !this.changed
+      },
+      onclick: function () { 
+      }
+    }
+  })
+</script>
