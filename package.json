@@ -1,7 +1,7 @@
 {
   "name": "node-red-contrib-tasmotas",
   "description": "Use and control Tasmota devices in NodeRed",
-  "version": "1.0.0",
+  "version": "1.0.1-beta.1",
   "license": "MIT",
   "author": "Peter Simeonov",
   "keywords": [
@@ -40,7 +40,6 @@
   "dependencies": {
     "child_process": "^1.0.2",
     "mqtt": "4.2.6",
-    "npm-packlist": "^1.4.7",
     "request": "^2.88.2"
   },
   "devDependencies": {

@@ -21,6 +21,10 @@
         <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
         <input type="text" id="node-config-input-name" placeholder="Name">
       </div>
+      <div class="form-row">
+        <label for="node-config-input-group"><i class="fa fa-tag"></i> Group</label>
+        <input type="text" id="node-config-input-group">
+      </div>
     </div>
     <div id="tasmota-advanced-tab" style="display:none">
       <div class="form-row">
@@ -187,6 +191,7 @@
       broker: { type: 'tasmota-mqtt-broker', required: true },
       device: { value: '', required: true },
       name: { value: '' },
+      group: { value: '' },
       // Advanced
       ip: { value: '' },
       host: { value: '' },
@@ -218,19 +223,16 @@
       tabs.addTab({ id: 'tasmota-advanced-tab', label: 'Advanced' })
       tabs.addTab({ id: 'tasmota-mqtt-tab', label: 'MQTT' })
 
-      const resDir = 'resources/node-red-contrib-tasmota'
-      const configDir = resDir + '/configs'
-
       const brokerNodes = {}
       RED.nodes.eachConfig(n => { if (n.type === 'tasmota-mqtt-broker') brokerNodes[n.broker] = n })
 
-      getMqttMap = () => {
-        const resp = get(resDir + '/mqtt_map.json')
-        return resp && (resp[0] == '{') && JSON.parse(resp) || {}
-      }
-
       const self = this
       const updateDevice = () => {
+        const manager = $('#node-config-input-manager').val()
+        const project = (manager !== '_ADD_') ? RED.nodes.node(manager).name : ''
+        const resDir = project && ('resources/node-red-contrib-tasmotas/' + project) || ''
+        const configDir = resDir && (resDir + '/configs') || ''
+  
         const device = $('#node-config-input-device').val()
         $('#node-config-input-ip').text(this.ip || '')
         $('#node-config-input-ip').attr('href', this.ip && ('http://' + this.ip) || '')
@@ -239,8 +241,7 @@
         $('#node-config-input-module').val('0')
         $('#node-config-input-relais').val('0')
 
-        //http://localhost:1880/resources/node-red-contrib-tasmota/configs/t1_02.json
-        const resp = device && get(`${configDir}/${device}.json`)
+        const resp = device && configDir && get(`${configDir}/${device}.json`)
         const config = resp && (resp[0] == '{') && JSON.parse(resp)
         if (config) {
           if (config.friendlyname && (config.friendlyname.length > 0)) $('#node-config-input-friendlynames').val(config.friendlyname.join(','))
@@ -295,6 +296,11 @@
         $('#list-avail-devices').html('')
         const rlist = []
         if (device) rlist.push(`<option value='${device}'></option>`)
+  
+        const getMqttMap = () => {
+          const resp = resDir && get(resDir + '/mqtt_map.json')
+          return resp && (resp[0] == '{') && JSON.parse(resp) || {}
+        }
         const mqttMap = getMqttMap()
         const deviceNodes = {}
         RED.nodes.eachConfig(n => { if (n.type === 'tasmota-device') deviceNodes[n.device] = n })
@@ -322,8 +328,8 @@
     return Httpreq.responseText
   }
 
-  function getDevices() {
-    const resp = get(`resources/node-red-contrib-tasmota/devices.json`)
+  function getDevices(project) {
+    const resp = get(`resources/node-red-contrib-tasmotas/${project}/devices.json`)
     return resp && (resp[0] == '{') && JSON.parse(resp)
   }
 

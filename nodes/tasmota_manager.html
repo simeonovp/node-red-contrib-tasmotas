@@ -7,31 +7,24 @@
     <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
     <input type="text" id="node-config-input-name" placeholder="Name">
   </div>
-  <div class="form-row">
-    <button type="button" id="btn-download-configs" class="red-ui-button">
-      <span> Download all configs</span>
-    </button>
-  </div>
 </script>
 
 <script type="text/html" data-help-name="tasmota-manager">
+  <p>A configuration node to manage multiple device running the <b>Tasmota</b> firmware.</p>
+  <p><b>DB uri</b> is optional parametr to define the location of the resource server if available.</p>
 </script>
 
 <script type="text/javascript">
   RED.nodes.registerType('tasmota-manager', {
     category: 'config',
     defaults: {
-      dbUri: { value: '' },
-      name: { value: '' }
+      dbUri: { value: ''},
+      name: { value: '', required: true }
     },
     label: function() {
       return this.name || 'Manager'
     },
     oneditprepare: function () {
-      const self = this
-      $('#btn-download-configs').click(function() {
-        //self.send({topic: 'downloadAllConfigs'})
-      })
     }
   })
 </script>

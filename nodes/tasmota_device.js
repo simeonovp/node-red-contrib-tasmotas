@@ -16,6 +16,7 @@ module.exports = function (RED) {
     broker: '', // mandatory
     device: '', // mandatory
     name: '',
+    group: '',
     ip: '',
     host: '',
     mac: '',
@@ -315,7 +316,7 @@ module.exports = function (RED) {
     }
 
     async downloadConfig(force = false) {
-      //.node-red\projects\node-red-contrib-tasmota\resources\configs
+      //.node-red\projects\node-red-contrib-tasmotas\resources\<project>\configs
       if (!this.manager || !this.config.ip) return
       this.deviceConfig = await this.manager.downloadConfig(this.config.ip, force)
       if (!this.deviceConfig) return
@@ -326,32 +327,6 @@ module.exports = function (RED) {
       }
 
       this.MQTTPublish('cmnd', 'STATUS', '11')
-    }
-
-    status0() {
-      //this.MQTTPublish('cmnd', 'STATUS', '0')
-      // 14:24:20 MQT: tasmota/pow_09/stat/STATUS = {"Status":{"Module":43,"FriendlyName":["Klima Office"],"Topic":"pow_09","ButtonTopic":"0","Power":1,"PowerOnState":3,"LedState":1,"LedMask":"FFFF","SaveData":1,"SaveState":1,"SwitchTopic":"0","SwitchMode":[0,0,0,0,0,0,0,0],"ButtonRetain":0,"SwitchRetain":0,"SensorRetain":0,"PowerRetain":0}}
-      // 14:24:20 MQT: tasmota/pow_09/stat/STATUS1 = {"StatusPRM":{"Baudrate":4800,"SerialConfig":"8E1","GroupTopic":"tasmotas","OtaUrl":"http://thehackbox.org/tasmota/release/tasmota.bin","RestartReason":"Software/System restart","Uptime":"0T01:04:39","StartupUTC":"2022-12-30T12:19:41","Sleep":50,"CfgHolder":4617,"BootCount":60,"BCResetTime":"2020-04-25T06:22:31","SaveCount":1070,"SaveAddress":"F6000"}}
-      // 14:24:20 MQT: tasmota/pow_09/stat/STATUS2 = {"StatusFWR":{"Version":"8.2.0(tasmota)","BuildDateTime":"2020-03-20T14:45:23","Boot":31,"Core":"STAGE","SDK":"2.2.2-dev(38a443e)","Hardware":"ESP8266EX","CR":"358/699"}}
-      // 14:24:20 MQT: tasmota/pow_09/stat/STATUS3 = {"StatusLOG":{"SerialLog":0,"WebLog":2,"MqttLog":0,"SysLog":0,"LogHost":"","LogPort":514,"SSId":["SiHaRu",""],"TelePeriod":300,"Resolution":"558180C0","SetOption":["00008009","2805C8000100068000005A00000000000000","000000C0","00000000"]}}
-      // 14:24:20 MQT: tasmota/pow_09/stat/STATUS4 = {"StatusMEM":{"ProgramSize":577,"Free":424,"Heap":25,"ProgramFlashSize":1024,"FlashSize":4096,"FlashChipId":"1640EF","FlashMode":3,"Features":["00000809","8FDAE397","043683A0","000000CD","010013C0","C000F981","00000004"],"Drivers":"1,2,3,4,5,6,7,8,9,10,12,16,18,19,20,21,22,24,26,27,29,30,35,37","Sensors":"1,2,3,4,5,6"}}
-      // 14:24:20 MQT: tasmota/pow_09/stat/STATUS5 = {"StatusNET":{"Hostname":"pow-09","IPAddress":"192.168.13.79","Gateway":"192.168.13.222","Subnetmask":"255.255.255.0","DNSServer":"192.168.13.222","Mac":"BC:DD:C2:8D:FE:E8","Webserver":2,"WifiConfig":4,"WifiPower":17.0}}
-      // 14:24:20 MQT: tasmota/pow_09/stat/STATUS6 = {"StatusMQT":{"MqttHost":"192.168.192.225","MqttPort":1883,"MqttClientMask":"Pow_09","MqttClient":"Pow_09","MqttUser":"DVES_USER","MqttCount":1,"MAX_PACKET_SIZE":1200,"KEEPALIVE":30}}
-      // 14:24:20 MQT: tasmota/pow_09/stat/STATUS7 = {"StatusTIM":{"UTC":"2022-12-30T13:24:20","Local":"2022-12-30T14:24:20","StartDST":"2022-03-27T02:00:00","EndDST":"2022-10-30T03:00:00","Timezone":"+01:00","Sunrise":"08:43","Sunset":"17:01"}}
-      // 14:24:20 MQT: tasmota/pow_09/stat/STATUS9 = {"StatusPTH":{"PowerDelta":0,"PowerLow":0,"PowerHigh":0,"VoltageLow":0,"VoltageHigh":0,"CurrentLow":0,"CurrentHigh":0}}
-      // 14:24:20 MQT: tasmota/pow_09/stat/STATUS10 = {"StatusSNS":{"Time":"2022-12-30T14:24:20","ENERGY":{"TotalStartTime":"2020-04-25T06:22:31","Total":263.033,"Yesterday":0.091,"Today":0.166,"Power":4,"ApparentPower":48,"ReactivePower":47,"Factor":0.08,"Voltage":235,"Current":0.202}}}
-      // 14:24:20 MQT: tasmota/pow_09/stat/STATUS11 = {"StatusSTS":{"Time":"2022-12-30T14:24:20","Uptime":"0T01:04:39","UptimeSec":3879,"Heap":25,"SleepMode":"Dynamic","Sleep":50,"LoadAvg":19,"MqttCount":1,"POWER":"ON","Wifi":{"AP":1,"SSId":"SiHaRu","BSSId":"50:D4:F7:50:38:24","Channel":6,"RSSI":66,"Signal":-67,"LinkCount":1,"Downtime":"0T00:00:07"}}}
-      const STATUS = {"Status":{"Module":43,"FriendlyName":["Klima Office"],"Topic":"pow_09","ButtonTopic":"0","Power":1,"PowerOnState":3,"LedState":1,"LedMask":"FFFF","SaveData":1,"SaveState":1,"SwitchTopic":"0","SwitchMode":[0,0,0,0,0,0,0,0],"ButtonRetain":0,"SwitchRetain":0,"SensorRetain":0,"PowerRetain":0}}
-      const STATUS1 = {"StatusPRM":{"Baudrate":4800,"SerialConfig":"8E1","GroupTopic":"tasmotas","OtaUrl":"http://thehackbox.org/tasmota/release/tasmota.bin","RestartReason":"Software/System restart","Uptime":"0T01:04:39","StartupUTC":"2022-12-30T12:19:41","Sleep":50,"CfgHolder":4617,"BootCount":60,"BCResetTime":"2020-04-25T06:22:31","SaveCount":1070,"SaveAddress":"F6000"}}
-      const STATUS2 = {"StatusFWR":{"Version":"8.2.0(tasmota)","BuildDateTime":"2020-03-20T14:45:23","Boot":31,"Core":"STAGE","SDK":"2.2.2-dev(38a443e)","Hardware":"ESP8266EX","CR":"358/699"}}
-      const STATUS3 = {"StatusLOG":{"SerialLog":0,"WebLog":2,"MqttLog":0,"SysLog":0,"LogHost":"","LogPort":514,"SSId":["SiHaRu",""],"TelePeriod":300,"Resolution":"558180C0","SetOption":["00008009","2805C8000100068000005A00000000000000","000000C0","00000000"]}}
-      const STATUS4 = {"StatusMEM":{"ProgramSize":577,"Free":424,"Heap":25,"ProgramFlashSize":1024,"FlashSize":4096,"FlashChipId":"1640EF","FlashMode":3,"Features":["00000809","8FDAE397","043683A0","000000CD","010013C0","C000F981","00000004"],"Drivers":"1,2,3,4,5,6,7,8,9,10,12,16,18,19,20,21,22,24,26,27,29,30,35,37","Sensors":"1,2,3,4,5,6"}}
-      const STATUS5 = {"StatusNET":{"Hostname":"pow-09","IPAddress":"192.168.13.79","Gateway":"192.168.13.222","Subnetmask":"255.255.255.0","DNSServer":"192.168.13.222","Mac":"BC:DD:C2:8D:FE:E8","Webserver":2,"WifiConfig":4,"WifiPower":17.0}}
-      const STATUS6 = {"StatusMQT":{"MqttHost":"192.168.192.225","MqttPort":1883,"MqttClientMask":"Pow_09","MqttClient":"Pow_09","MqttUser":"DVES_USER","MqttCount":1,"MAX_PACKET_SIZE":1200,"KEEPALIVE":30}}
-      const STATUS7 = {"StatusTIM":{"UTC":"2022-12-30T13:24:20","Local":"2022-12-30T14:24:20","StartDST":"2022-03-27T02:00:00","EndDST":"2022-10-30T03:00:00","Timezone":"+01:00","Sunrise":"08:43","Sunset":"17:01"}}
-      const STATUS9 = {"StatusPTH":{"PowerDelta":0,"PowerLow":0,"PowerHigh":0,"VoltageLow":0,"VoltageHigh":0,"CurrentLow":0,"CurrentHigh":0}}
-      const STATUS10 = {"StatusSNS":{"Time":"2022-12-30T14:24:20","ENERGY":{"TotalStartTime":"2020-04-25T06:22:31","Total":263.033,"Yesterday":0.091,"Today":0.166,"Power":4,"ApparentPower":48,"ReactivePower":47,"Factor":0.08,"Voltage":235,"Current":0.202}}}
-      const STATUS11 = {"StatusSTS":{"Time":"2022-12-30T14:24:20","Uptime":"0T01:04:39","UptimeSec":3879,"Heap":25,"SleepMode":"Dynamic","Sleep":50,"LoadAvg":19,"MqttCount":1,"POWER":"ON","Wifi":{"AP":1,"SSId":"SiHaRu","BSSId":"50:D4:F7:50:38:24","Channel":6,"RSSI":66,"Signal":-67,"LinkCount":1,"Downtime":"0T00:00:07"}}}
     }
 
     _onMqttStatus(command, payload) {

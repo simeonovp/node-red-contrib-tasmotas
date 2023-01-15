@@ -117,7 +117,7 @@ module.exports = function (RED) {
       this.config = config
       this.status = 'unconfigured';
 
-      const resDir = path.resolve(path.join(__dirname, '../resources'))
+      const resDir = path.resolve(path.join(__dirname, '../resources', config.name))
       const cfgDir = path.join(resDir, 'configs')
       this.manifestDb = new DbBase({ path: path.join(resDir, 'manifest.json') });
 
@@ -125,6 +125,7 @@ module.exports = function (RED) {
         path: path.join(resDir, 'devices.json'), 
         url: this.config.dbUri && (this.config.dbUri + 'devices.json') 
       }, this.manifestDb);
+      this.grp = 0
 
       this.networkDb = new DbBase({ 
         path: path.join(resDir, 'network.json'), 
@@ -132,6 +133,7 @@ module.exports = function (RED) {
       }, this.manifestDb);
 
       this.confdir = path.join(resDir, 'configs')
+      if (!fs.existsSync(this.confdir)) fs.mkdirSync(this.confdir, { recursive: true });
 
       this.mqttMapPath = path.resolve(path.join(this.confdir, '..', 'mqtt_map.json'))
       this.mqttMap
@@ -164,6 +166,20 @@ module.exports = function (RED) {
       try {
         if (this.devicesDb && await this.devicesDb.download(true)) this.devicesDb.save(overwrite)
         if (this.networkDb && await this.networkDb.download(true)) this.networkDb.save(overwrite);
+        const groups = this.devicesDb && this.devicesDb.getTable('groups') || [{ idx: 0, name: '?' }]
+        const group = groups.find(row => (row['name'] === this.name))
+        if (group) {
+          this.grp = group.idx
+        }
+        else {
+          this.grp = groups.lentgh
+          groups.push({ idx: this.grp, name: this.name })
+          this.log(`DevicesDb add group ${this.name} with idx ${this.grp}`)
+          this.devicesDb.save(true)
+        }
+
+        this._downloadDecodeConfig()
+
         this.setStatus('configured');
       }
       catch(err) {
@@ -197,6 +213,16 @@ module.exports = function (RED) {
       this.status = status;
       // Pass the new status to all listeners
       //?? this.emit('devdb_status', status);
+    }
+
+    async _downloadDecodeConfig() {
+      const localPath = this.confdir + '/decode-config.py'
+
+      if (fs.existsSync(localPath)) return
+      this.log('download decode-config.py to ' + localPath)
+      const url = 'https://raw.githubusercontent.com/tasmota/decode-config/development/decode-config.py'
+      const data = await this.getRequest(url)
+      fs.createWriteStream(localPath).write(data)
     }
 
     _spawnDecodeConfig(params) {
@@ -273,8 +299,10 @@ module.exports = function (RED) {
       if (!this.devicesDb.data) return
       const db = this.devicesDb.data
       db['devices'] = db['devices'] || []
+      const group = device.config.group && db['groups'].find(row => (row['name'] === device.config.group))
       db['devices'].push({
         fw: device.config.version || 1,
+        grp: group?.idx || this.grp,
         host: device.config.host,
         ip: device.config.ip,
         mac: device.config.mac,
@@ -297,10 +325,9 @@ module.exports = function (RED) {
       return this.devicesDb.data && this.devicesDb.data['devices']
     }
 
-    async httpCommand(ip, cmnd, val) {
-      const url = `http://${ip}/cm?cmnd=${cmnd}` + (val && (' ' + val) || '')
-      return await new Promise((resolve, reject) => {
-        request(url, { json: true }, (err, resp, data) => {
+    getRequest(url, json) {
+      return new Promise((resolve, reject) => {
+        request(url, { json }, (err, resp, data) => {
           if (err || (resp && resp.statusCode >= 400) || !data) {
             console.warn('Failed to get ' + url)
             reject (err ? err : resp.statusCode)
@@ -310,6 +337,11 @@ module.exports = function (RED) {
           resolve(data)
         });
       });
+    }
+
+    async httpCommand(ip, cmnd, val) {
+      const url = `http://${ip}/cm?cmnd=${cmnd}` + (val && (' ' + val) || '')
+      return await this.getRequest(url, true)
     }
   }
 

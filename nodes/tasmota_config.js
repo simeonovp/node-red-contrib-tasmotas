@@ -39,13 +39,13 @@ module.exports = function (RED) {
     async onInput(msg, send, done) {
       switch (msg.action) {
       case 'httpCommand':
-        if (!msg.ip)  return done('IP address not selected')
+        if (!msg.ip && !msg.host)  return done('IP address or host must be selected')
         if (!msg.command)  return done('Command not selected')
-        msg.payload = await this.manager.httpCommand(msg.ip, msg.command, msg.val)
+        msg.payload = await this.manager.httpCommand(msg.ip || msg.host, msg.command, msg.val)
         break
       case 'downloadConfig':
-        if (!msg.ip)  return done('IP address not selected')
-        msg.payload = await this.manager.downloadConfig(msg.ip, msg.force)
+        if (!msg.ip && !msg.host)  return done('IP address or host must be selected')
+        msg.payload = await this.manager.downloadConfig(msg.ip || msg.host, msg.force)
         break
       case 'downloadAllConfigs':
         await this.manager.downloadConfig(msg.force)
