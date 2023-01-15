@@ -147,8 +147,6 @@ module.exports = function (RED) {
         }
       })
 
-      this.initServer(RED.server, RED.httpNode || RED.httpAdmin, RED.log, RED.settings)
-
       this.initialize(true)
       
       if (!fs.existsSync(this.mqttMapPath)) this.downloadAllConfigs()
@@ -157,50 +155,6 @@ module.exports = function (RED) {
     get devices() {  return this.devicesDb.data }
     get network() {  return this.networkDb.data }
  
-    initServer(server, app, log, redSettings) {
-      const urlPath = this.config.urlPath || 'tasmota'
-
-      // const join = () => {
-      //   const trimRegex = new RegExp('^\\/|\\/$','g')
-      //   const paths = Array.prototype.slice.call(arguments)
-      //   return '/' + paths.map(e => {
-      //     if (e) { return e.replace(trimRegex, '') }
-      //   }).filter(e => { return e }).join('/')
-      // }
-  
-      const socketIoPath = redSettings.httpNodeRoot + urlPath // [redSettings.httpNodeRoot + urlPath, 'socket.io'].join('/')
-      this.io = socketio(server, { path: socketIoPath }) // '/tasmota'
-
-      this.io.use((socket, next) => {
-        this.log('-- on io use ======================================')
-        return next()
-        // if (socket.client.conn.request.url.indexOf("transport=websocket") !== -1) {
-        //   // Reject direct websocket requests
-        //   socket.client.conn.close()
-        // }
-        // else if (socket.handshake.xdomain === false) {
-        //   return next()
-        // } 
-        // else {
-        //   socket.disconnect(true)
-        // }
-      });
-
-      this.io.on('connection', (socket) => {
-        this.log('-- on connection ======================================')
-        this.ev.emit('newsocket', socket.client.id, socket.request.headers['x-real-ip'] || socket.request.headers['x-forwarded-for'] || socket.request.connection.remoteAddress)
-        socket.on('disconnect', () => {
-          this.log('-- on disconnect ======================================')
-          this.ev.emit('endsocket', socket.client.id, socket.request.headers['x-real-ip'] || socket.request.headers['x-forwarded-for'] || socket.request.connection.remoteAddress)
-        })
-        socket.on('my-request', (reqPar) => {
-          this.log('-- on my-request, reqPar:' + JSON.stringify(reqPar))
-          const resPar = 'Hallo'
-          socket.emit('my-response', resPar)
-        })
-      })
-    }
-
     async initialize(overwrite = false) {
       //download:
       if (!this.config.dbUri) return
@@ -345,10 +299,8 @@ module.exports = function (RED) {
 
     async httpCommand(ip, cmnd, val) {
       const url = `http://${ip}/cm?cmnd=${cmnd}` + (val && (' ' + val) || '')
-      //this.log('-- httpCommand url:' + url)
       return await new Promise((resolve, reject) => {
         request(url, { json: true }, (err, resp, data) => {
-          //this.log('-- request callback err:' + err)
           if (err || (resp && resp.statusCode >= 400) || !data) {
             console.warn('Failed to get ' + url)
             reject (err ? err : resp.statusCode)

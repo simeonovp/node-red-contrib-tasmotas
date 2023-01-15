@@ -9,7 +9,6 @@ module.exports = function (RED) {
       this.manager = config.manager && RED.nodes.getNode(config.manager)
         
       this.on('input', (msg, send, done) => {
-        this.log('-- on input action:' + msg.action)
         if (!this.manager) return done('Manager not found')
         if (!msg.action) return done('No action selected')
 
@@ -55,7 +54,6 @@ module.exports = function (RED) {
         this.warn('Unknown action:' + msg.action)
         return done()
       }
-      //this.log('-- on input resp:' + JSON.stringify(msg, null, 2))
       send(msg)
       done()
     }
