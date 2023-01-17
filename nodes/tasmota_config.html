@@ -10,6 +10,20 @@
 </script>
 
 <script type="text/html" data-help-name="tasmota-config">
+  <p>A node to manage the Tasmota devices.</p>
+  <p>
+    The supported actions can be selected over the input <b>msg.action</b> property. 
+    To allow better support of dashboard nodes <b>msg.topic</b> property can be used instead. 
+    In thes case msg.action must be empty. Some actions needs parameter. 
+    The value of the parameter must be set in <b>msg.payload</b>. Actions who needs two 
+    parameters cann be triggered only by <b>msg.action</b> and the parameters in 
+    <b>msg.topic</b> and <b>msg.payload</b>
+    Example msg:{action: 'httpCommand', topic:'Power', payload: '1'}
+  </p>
+  <p>
+    The input message is forwarded to the output. In some case it will be expanded by additional
+    action specific parameters. The payload contains the action result.
+  </p>
 </script>
 
 <script type="text/javascript">
@@ -25,7 +39,7 @@
     inputs: 1,
     outputs: 1,
     label: function () {
-      return this.name || RED.nodes.node(this.device)?.device || 'Config'
+      return this.name || this.manager && RED.nodes.node(this.manager).name || 'Config'
     },
     labelStyle: function () {
       return this.name ? 'node_label_italic' : ''

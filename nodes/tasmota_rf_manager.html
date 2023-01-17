@@ -1,0 +1,36 @@
+<script type="text/html" data-template-name="tasmota-rf-manager">
+  <div class="form-row">
+    <label for="node-config-input-manager"><i class="fa fa-globe"></i> Project</label>
+    <input type="text" id="node-config-input-manager">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-config-input-name" placeholder="Name">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-debounce"><i class="fa fa-tag"></i> Debounce</label>
+    <input type="text" id="node-config-input-debounce">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="tasmota-rf-manager">
+  <p>A configuration node to manage one or more RF devices over RF bridges running the <b>Tasmota</b> firmware.</p>
+  <p>The RF devices can be motion or contact sensors, remote controls or other devices communicating over RF433.</p>
+  <p>Use debounce parameter > 0 if mutliple bridges receives the same events.</p>
+</script>
+
+<script type="text/javascript">
+  RED.nodes.registerType('tasmota-rf-manager', {
+    category: 'config',
+    defaults: {
+      manager: { type: 'tasmota-manager', required: true },
+      name: { value: '' },
+      debounce: { value: '0' }
+    },
+    label: function() {
+      return this.name || this.manager && RED.nodes.node(this.manager).name || 'RF Manager'
+    },
+    oneditprepare: function () {
+    }
+  })
+</script>

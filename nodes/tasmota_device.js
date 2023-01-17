@@ -25,7 +25,7 @@ module.exports = function (RED) {
     relais: 0,
     friendlynames: '',
     // advanced
-    fullTopic: 'tasmota/%topic%/%prefix%', // '%prefix%/%topic%/',
+    fullTopic: '%prefix%/%topic%/',
     cmndPrefix: 'cmnd',
     statPrefix: 'stat',
     telePrefix: 'tele',
@@ -456,6 +456,14 @@ module.exports = function (RED) {
       }
       else if (this.subGroups.tele && topic.startsWith(this.subGroups.tele.topic)) {
         const command = topic.substr(this.subGroups.tele.topic.length)
+        
+        // if (this.manager) {
+        //   const data = JSON.parse(payload.toString())
+        //   if (this.manager.rfManager && data.RfReceived) {
+        //     this.manager.rfManager.onRfReceived(this.device, data.Time, data.RfReceived)
+        //   }
+        // }
+
         this._fireMqttMessage(topic, payload, packet, command, this.subGroups.tele.subscriptions);
       }
       else {

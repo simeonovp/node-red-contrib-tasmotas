@@ -7,11 +7,17 @@
     <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
     <input type="text" id="node-config-input-name" placeholder="Name">
   </div>
+  <hr>
+  <div class="form-row">
+    <label for="node-config-input-network"><i class="fa fa-tag"></i> Network</label>
+    <input type="text" id="node-config-input-network" placeholder="192.168.1.0/24">
+  </div>
 </script>
 
 <script type="text/html" data-help-name="tasmota-manager">
   <p>A configuration node to manage multiple device running the <b>Tasmota</b> firmware.</p>
   <p><b>DB uri</b> is optional parametr to define the location of the resource server if available.</p>
+  <p>Parameter <b>Networ</b> can be used to scan for new Tasmota devices.</p>
 </script>
 
 <script type="text/javascript">
@@ -19,7 +25,8 @@
     category: 'config',
     defaults: {
       dbUri: { value: ''},
-      name: { value: '', required: true }
+      name: { value: '', required: true },
+      network: { value: '' }
     },
     label: function() {
       return this.name || 'Manager'

@@ -1,0 +1,41 @@
+<script type="text/html" data-template-name="tasmota-rf-device">
+  <div class="form-row">
+    <label for="node-input-manager"><i class="fa fa-globe"></i> Rf Manager</label>
+    <input type="text" id="node-input-manager">
+  </div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name">
+  </div>
+  <hr>
+  <div class="form-row">
+    <label for="node-input-keys"><i class="fa fa-tag"></i> RF keys</label>
+    <input type="text" id="node-input-keys">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="tasmota-rf-device">
+</script>
+
+<script type="text/javascript">
+  RED.nodes.registerType('tasmota-rf-device', {
+    category: 'tasmota',
+    color: '#10AF80',
+    defaults: {
+      manager: { type: 'tasmota-rf-manager', required: true },
+      name: { value: '' },
+      keys: { value: '' }
+    },
+    icon: 'tasmota-sensor.svg',
+    paletteLabel: 'RF Device',
+    inputs: 1,
+    outputs: 1,
+    label: function() {
+      return this.name || 'RF Device'
+    },
+    labelStyle: function() {
+      return this.name ? 'node_label_italic' : ''
+    },
+    oneditprepare: function () { }
+  })
+</script>

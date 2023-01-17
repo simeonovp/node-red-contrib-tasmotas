@@ -109,7 +109,7 @@ module.exports = function (RED) {
     }
   
   }
-  
+
   class TasmotaManager {
     constructor (config) {
       RED.nodes.createNode(this, config)
@@ -132,6 +132,11 @@ module.exports = function (RED) {
         url: this.config.dbUri && (this.config.dbUri + 'network.json') 
       }, this.manifestDb);
 
+      this.rf433Db = new DbBase({ 
+        path: path.join(resDir, 'rf433codes.json'), 
+        url: this.config.dbUri && (this.config.dbUri + 'rf433codes.json') 
+      }, this.manifestDb);
+
       this.confdir = path.join(resDir, 'configs')
       if (!fs.existsSync(this.confdir)) fs.mkdirSync(this.confdir, { recursive: true });
 
@@ -140,6 +145,7 @@ module.exports = function (RED) {
       this.io
       this.ev = new events.EventEmitter()
       this.ev.setMaxListeners(0)
+      this.rfManager
 
       this.on('input', (msg, send, done) => {
         switch (msg.topic) {
@@ -162,7 +168,7 @@ module.exports = function (RED) {
       if (!this.config.dbUri) return
       if (!overwrite && (this.status === 'configured')) return
       if (this.status === 'initializing') return
-      this.setStatus('initializing');
+      this._setStatus('initializing');
       try {
         if (this.devicesDb && await this.devicesDb.download(true)) this.devicesDb.save(overwrite)
         if (this.networkDb && await this.networkDb.download(true)) this.networkDb.save(overwrite);
@@ -180,7 +186,7 @@ module.exports = function (RED) {
 
         this._downloadDecodeConfig()
 
-        this.setStatus('configured');
+        this._setStatus('configured');
       }
       catch(err) {
         this.status = 'unconfigured';
@@ -188,28 +194,7 @@ module.exports = function (RED) {
       }
     }
 
-    loadMqttMap() {
-      this.mqttMap = fs.existsSync(this.mqttMapPath) && JSON.parse(fs.readFileSync(this.mqttMapPath, 'utf8')) || {}
-      let mapDirty = false
-
-      //refresh map by existing configs
-      fs.readdirSync(this.confdir).forEach(file => {
-        const { ext } = path.parse(file);
-        if (ext !== '.json') return
-        const filepath = path.join(this.confdir, file)
-        const config = JSON.parse(fs.readFileSync(filepath, 'utf8'));
-        const ip_address = config?.ip_address
-        const mqtt_topic = config?.mqtt_topic
-        if (mqtt_topic && ip_address && ip_address[0] && !this.mqttMap[ip_address[0]]) {
-          this.mqttMap[ip_address[0]] = mqtt_topic
-          mapDirty = true
-        }
-      }); 
-      if (mapDirty) fs.createWriteStream(this.mqttMapPath).write(JSON.stringify(this.mqttMap, null, 2));
-      return this.mqttMap
-    }
-
-    setStatus(status) {
+    _setStatus(status) {
       this.status = status;
       // Pass the new status to all listeners
       //?? this.emit('devdb_status', status);
@@ -233,7 +218,33 @@ module.exports = function (RED) {
         pythonProcess.on('exit', (code, signal) => resolve(code))
       })
     }
-    
+
+    // begin commands
+    loadMqttMap() {
+      this.mqttMap = fs.existsSync(this.mqttMapPath) && JSON.parse(fs.readFileSync(this.mqttMapPath, 'utf8')) || {}
+      let mapDirty = false
+
+      //refresh map by existing configs
+      fs.readdirSync(this.confdir).forEach(file => {
+        const { ext } = path.parse(file);
+        if (ext !== '.json') return
+        const filepath = path.join(this.confdir, file)
+        const config = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+        const ip_address = config?.ip_address
+        const mqtt_topic = config?.mqtt_topic
+        if (mqtt_topic && ip_address && ip_address[0] && !this.mqttMap[ip_address[0]]) {
+          this.mqttMap[ip_address[0]] = mqtt_topic
+          mapDirty = true
+        }
+      }); 
+      if (mapDirty) fs.createWriteStream(this.mqttMapPath).write(JSON.stringify(this.mqttMap, null, 2));
+      return this.mqttMap
+    }
+
+    getRf433Codes() {
+      return this.rf433Db.data || {}
+    }
+
     async downloadConfig(ip, force = false) {
       if (!this.mqttMap) this.loadMqttMap()
       const mqtt_topic = this.mqttMap && this.mqttMap[ip]
@@ -287,6 +298,43 @@ module.exports = function (RED) {
       }
     }
 
+    async scanNetwork() {
+      if (!this.config.network) return this.error('Network not configured')
+      if (!this.mqttMap) this.loadMqttMap()
+      try{
+        const parts = this.config.network.split('/')
+        const ipBytes = parts[0].split('.')
+        if (ipBytes.length !== 4) return this.error('Format error, ip:' + parts[0])
+
+        const ipAdr = parts[0].split('.').reduce((sum, b, i) => sum + (b << 8 * (3 - i)), 0)
+        const prefix = (parts.length > 1) && parseInt(parts[1]) || 24
+        if (prefix < 16) return this.error('Min supported prefix is 16, configured prefix:' + prefix)
+        const mask = (1 << (32 - prefix)) - 1
+        const minAdr = ipAdr & ~mask
+        const maxAdr = (minAdr + mask)
+        const intToIP = (ip) => [24, 16, 8, 0].map(n => (ip >> n) & 0xff).join('.')
+        
+        this.log(`Scan from ${intToIP(minAdr + 1)} to ${intToIP(maxAdr - 1)}`)
+        if (this.busy) return
+        this.busy = true
+        for (let ip = minAdr + 1; ip < maxAdr; ip++) {
+          const ipStr = intToIP(ip)
+          if (!this.mqttMap[ipStr]) {
+            try {
+              const res = await this.httpCommand(ipStr, 'Topic', '', 2000)
+              res && this.log('Found Tasmota device at ' + ipStr)
+              this.downloadConfig(ipStr)
+            }
+            catch(err) { }
+          }
+        }
+      }
+      catch(err){
+        this.error(err)
+      }
+      this.busy = false
+    }
+
     registerDevice(device) {
       if (!device.config.ip) return
       const dbDevice = this.devicesDb.findTableRaw('devices', 'ip', device.config.ip)
@@ -322,12 +370,29 @@ module.exports = function (RED) {
     }
 
     getDbDevices() {
-      return this.devicesDb.data && this.devicesDb.data['devices']
+      return this.devicesDb.data && this.devicesDb.data['devices'].filter((el) => el.fw)
     }
 
-    getRequest(url, json) {
+    listDbDevices(field) {
+      const arr = []
+      if (!this.devicesDb.data) return arr
+      switch (field) {
+      case 'ip':
+        this.devicesDb.data['devices'].forEach((el) => (el.fw && el.ip && arr.push(el.ip)))
+        return arr
+      case 'host':
+        this.devicesDb.data['devices'].forEach((el) => (el.fw && el.host && (el.host !== '?') && arr.push(el.host)))
+        return arr
+      default:
+        if (!this.mqttMap) this.loadMqttMap()
+        this.devicesDb.data['devices'].forEach((el) => (el.fw && el.ip && this.mqttMap[el.ip] && arr.push(this.mqttMap[el.ip])))
+        return arr
+      }
+    }
+
+    getRequest(url, json, timeout) {
       return new Promise((resolve, reject) => {
-        request(url, { json }, (err, resp, data) => {
+        request(url, { json, timeout }, (err, resp, data) => {
           if (err || (resp && resp.statusCode >= 400) || !data) {
             console.warn('Failed to get ' + url)
             reject (err ? err : resp.statusCode)
@@ -339,10 +404,11 @@ module.exports = function (RED) {
       });
     }
 
-    async httpCommand(ip, cmnd, val) {
+    async httpCommand(ip, cmnd, val, timeout) {
       const url = `http://${ip}/cm?cmnd=${cmnd}` + (val && (' ' + val) || '')
-      return await this.getRequest(url, true)
+      return await this.getRequest(url, true, timeout)
     }
+    // end commands
   }
 
   RED.nodes.registerType('tasmota-manager', TasmotaManager)
