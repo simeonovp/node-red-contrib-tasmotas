@@ -4,13 +4,42 @@
     <input type="text" id="node-input-manager">
   </div>
   <div class="form-row">
+    <label for="node-input-group"><i class="fa fa-tag"></i> Group</label>
+    <datalist id="list-avail-groups"></datalist>
+    <input type="text" id="node-input-group" list="list-avail-groups" autocomplete="on">
+  </div>
+  <div class="form-row">
     <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-    <input type="text" id="node-input-name" placeholder="Name">
+    <datalist id="list-avail-devices"></datalist>
+    <input type="text" id="node-input-name" placeholder="Name" list="list-avail-devices" autocomplete="on">
   </div>
   <hr>
   <div class="form-row">
-    <label for="node-input-keys"><i class="fa fa-tag"></i> RF keys</label>
-    <input type="text" id="node-input-keys">
+    <label for="node-input-canReceive" style="width:70%">
+      <input type="checkbox" id="node-input-canReceive" style="display:inline-block; width:15px; vertical-align:baseline;">
+      Can receive
+    </label>
+  </div>
+  <div class="form-row">
+    <label for="node-input-bridge"><i class="fa fa-tag"></i> Bridge</label>
+    <datalist id="list-avail-bridges"></datalist>
+    <input type="text" id="node-input-bridge" list="list-avail-bridges" autocomplete="on">
+  </div>
+  <hr>
+  <div class="form-row">
+    <label for="btn-add-code"><i class="fa fa-tag"></i> Codes:</label>
+    <button type="button" id="btn-add-code" class="red-ui-button">
+      <i class="fa fa-plus"></i>
+    </button>
+    <table id="rf-codes" class="table table-hover" style="border:1px solid;border-collapse:collapse">
+      <thead>
+        <tr id="table-head">
+          <th style="text-align:left;width:60%">Name</th>
+          <th style="text-align:left">Code</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </div>
 </script>
 
@@ -23,8 +52,11 @@
     color: '#10AF80',
     defaults: {
       manager: { type: 'tasmota-rf-manager', required: true },
-      name: { value: '' },
-      keys: { value: '' }
+      name: { value: '', required: true },
+      group: { value: '' },
+      codes: { value: '' },
+      bridge: { value: '' },
+      canReceive: { value: false }
     },
     icon: 'tasmota-sensor.svg',
     paletteLabel: 'RF Device',
@@ -36,6 +68,159 @@
     labelStyle: function() {
       return this.name ? 'node_label_italic' : ''
     },
-    oneditprepare: function () { }
+    oneditprepare: function () {
+      const self = this
+      const rf433Db = (() => {
+        console.log('-- load rf433Db')
+        const get = (url) => {
+          const Httpreq = new XMLHttpRequest() // a new request
+          Httpreq.open('GET', url, false)
+          Httpreq.send(null)
+          return Httpreq.responseText
+        }
+
+        const manager = $('#node-input-manager').val()
+        const rfMmanager = (manager !== '_ADD_') && RED.nodes.node(manager)
+        if (!rfMmanager?.manager) return
+
+        const devManager = RED.nodes.node(rfMmanager.manager)
+        const project = devManager?.name || '' 
+        if (!project) return
+
+        const url = ('resources/node-red-contrib-tasmotas/' + project + '/rf433codes.json')
+        const resp = get(url)
+        return resp && (resp[0] == '{') && JSON.parse(resp)
+      })()
+
+      const fillCodes = (codes) => {
+        console.log('-- fillCodes, codes:' + JSON.stringify(codes))
+        $('#rf-codes > tbody').html('')
+        const ilist = []
+        for (let code in codes) {
+          ilist.push(`<tr>
+              <td ><input type="text" value="${codes[code].name || '?'}"></td>
+              <td ><input type="text" value="${code}"></td>
+            </tr>`)
+        }
+        $('#rf-codes tbody').append(ilist.join(''))
+      }
+
+      const updateCodes = () => {
+        console.log('-- updateCodes')
+        let codes = {}
+        if (rf433Db) {
+          const group = self.group || 'default'
+          const device = rf433Db[group]?.find(dbDevice => (dbDevice.name === self.name))
+          codes = device?.codes || {}
+          console.log(`-- call fillCodes, group:${group}, device:${JSON.stringify(device)}`)
+        }
+        fillCodes(codes)
+      }
+      
+      const updateBridges = () => {
+        console.log('-- updateBridges, bridge:' + self.bridge)
+        $('#list-avail-bridges').html('')
+        const rlist = []
+        let bridge
+        if (rf433Db) {
+          const group = self.group || 'default'
+          const device = rf433Db[group]?.find(dbDevice => (dbDevice.name === self.name))
+          if (device?.timimgs) {
+            for (let dbBridge in device.timimgs) {
+              rlist.push(`<option value='${self.dbBridge}'></option>`)
+              if (self.bridge == dbBridge) bridge = dbBridge
+            }
+          }
+        }
+        $('#list-avail-bridges').append(rlist.join(''))
+      }
+
+      const updateDevices = () => {
+        console.log('-- updateDevices, name:' + self.name)
+        $('#list-avail-devices').html('')
+        const rlist = []
+        if (rf433Db) {
+          let device
+          const group = self.group || 'default'
+          if (rf433Db[group]) {
+            for (let dbDevice of rf433Db[group]) {
+              rlist.push(`<option value='${dbDevice.name}'></option>`)
+              if (dbDevice.name === self.name) device = dbDevice
+            }
+          }
+          $('#list-avail-devices').append(rlist.join(''))
+          $('#node-input-name').val(self.group && (device?.name || '') || self.name)
+          updateBridges()
+          updateCodes()
+        }
+      }
+
+      const updateGroups = (() => {
+        console.log('-- updateGroups, group:' + self.group)
+        $('#list-avail-groups').html('')
+        const rlist = []
+        let group
+        if (rf433Db) {
+          for (let dbGroup in rf433Db) {
+            rlist.push(`<option value='${dbGroup}'></option>`)
+            if (dbGroup === self.group) group = dbGroup
+          }
+          $('#list-avail-groups').append(rlist.join(''))
+          $('#node-input-group').val(group || '')
+        }
+      })()
+
+      if (this.codes) fillCodes(JSON.parse(this.codes))
+      $('#btn-add-code').click(() => {
+        $('#rf-codes > tbody').append(`<tr>
+            <td ><input type="text"></td>
+            <td ><input type="text"></td>
+          </tr>`)
+      })
+
+      $('#node-input-name').change(() => {
+        const val = $('#node-input-name').val()
+        console.log(`-- change name from "${self.name}" to "${val}"`)
+        if (self.name !== val) {
+          self.name = val
+          updateBridges()
+          updateCodes()
+        }
+      })
+
+      $('#node-input-group').change(() => {
+        const val = $('#node-input-group').val()
+        console.log(`-- change group from "${self.group}" to "${val}"`)
+        if (self.group !== val) {
+          self.group = val
+          updateDevices()
+        }
+      })
+
+      $('#node-input-bridge').change(() => {
+        self.bridge = $('#node-input-bridge').val()
+        console.log('-- change bridge:' + self.bridge)
+      })
+    },
+    oneditsave: function() {
+      const codes = {}
+      let name
+      $('#rf-codes tbody').find("tr").each((index, row) => {
+        $(row).find('input').each((index, element) => {
+          const colVal = $(element).val()
+          console.log(`-- save input idx:${index}, val:${colVal}`)
+          switch(index) {
+          case 0:
+            name = (colVal !== '?') && colVal
+            break
+          case 1:
+            if (colVal && name) codes[colVal] = { name }
+            break
+          }
+        })
+      })
+      this.codes = JSON.stringify(codes)
+      console.log(`-- save codes: ${this.codes}`)
+    }
   })
 </script>

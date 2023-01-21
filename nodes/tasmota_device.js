@@ -311,6 +311,7 @@ module.exports = function (RED) {
       this.on('close', (done) => {
         for (const item in this.swiches) item.onClose()
         if (this.users) this._deregsterAtBroker(this)
+        if (this.manager) this.manager.unregisterDevice(this)
         done()
       })
     }

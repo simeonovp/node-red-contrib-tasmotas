@@ -1,6 +1,7 @@
 const { emit } = require('process')
 const path = require('path')
 const fs = require('fs')
+const fsx = require('fs-extra')
 const request = require('request')
 const spawn = require("child_process").spawn;
 
@@ -117,28 +118,30 @@ module.exports = function (RED) {
       this.config = config
       this.status = 'unconfigured';
 
-      const resDir = path.resolve(path.join(__dirname, '../resources', config.name))
-      const cfgDir = path.join(resDir, 'configs')
-      this.manifestDb = new DbBase({ path: path.join(resDir, 'manifest.json') });
+      this.resDir = path.resolve(path.join(__dirname, '../resources', config.name))
+      this.manifestDb = new DbBase({ path: path.join(this.resDir, 'manifest.json') });
 
       this.devicesDb = new DbBase({ 
-        path: path.join(resDir, 'devices.json'), 
+        path: path.join(this.resDir, 'devices.json'), 
         url: this.config.dbUri && (this.config.dbUri + 'devices.json') 
       }, this.manifestDb);
       this.grp = 0
 
       this.networkDb = new DbBase({ 
-        path: path.join(resDir, 'network.json'), 
+        path: path.join(this.resDir, 'network.json'), 
         url: this.config.dbUri && (this.config.dbUri + 'network.json') 
       }, this.manifestDb);
 
       this.rf433Db = new DbBase({ 
-        path: path.join(resDir, 'rf433codes.json'), 
+        path: path.join(this.resDir, 'rf433codes.json'), 
         url: this.config.dbUri && (this.config.dbUri + 'rf433codes.json') 
       }, this.manifestDb);
+      this.rf433DbDirty = false
 
-      this.confdir = path.join(resDir, 'configs')
+      this.confdir = path.join(this.resDir, 'configs')
       if (!fs.existsSync(this.confdir)) fs.mkdirSync(this.confdir, { recursive: true });
+
+      this.devices = {}
 
       this.mqttMapPath = path.resolve(path.join(this.confdir, '..', 'mqtt_map.json'))
       this.mqttMap
@@ -155,12 +158,18 @@ module.exports = function (RED) {
         }
       })
 
+      this.on('close', (done)=>{
+        if (this.rf433DbDirty) this.rf433Db.save()
+        done()
+      })
+
       this.initialize(true)
       
       if (!fs.existsSync(this.mqttMapPath)) this.downloadAllConfigs()
+      else this.loadMqttMap()
     }
 
-    get devices() {  return this.devicesDb.data }
+    get dbDevices() {  return this.devicesDb.data }
     get network() {  return this.networkDb.data }
  
     async initialize(overwrite = false) {
@@ -220,6 +229,17 @@ module.exports = function (RED) {
     }
 
     // begin commands
+    backupResources(bakDir) {
+      bakDir = path.resolve(path.join(this.resDir, '..', bakDir))
+      const date = new Date().toISOString().slice(0, 10);
+      const bakPath = path.join(bakDir, `${this.config.name}_${date.slice(2, 4)}${date.slice(5, 7)}${date.slice(8, 10)}`)
+      if (!fs.existsSync(bakDir)) fs.mkdirSync(bakDir, { recursive: true });
+      try {
+        fsx.copySync(this.resDir, bakPath)
+      } 
+      catch (err) { this.error(err) }
+    }
+    
     loadMqttMap() {
       this.mqttMap = fs.existsSync(this.mqttMapPath) && JSON.parse(fs.readFileSync(this.mqttMapPath, 'utf8')) || {}
       let mapDirty = false
@@ -245,9 +265,13 @@ module.exports = function (RED) {
       return this.rf433Db.data || {}
     }
 
+    saveRf433Codes(onClose) {
+      if (onClose) this.rf433DbDirty = true
+      else this.rf433Db.save()
+    }
+    
     async downloadConfig(ip, force = false) {
-      if (!this.mqttMap) this.loadMqttMap()
-      const mqtt_topic = this.mqttMap && this.mqttMap[ip]
+      const mqtt_topic = this.mqttMap[ip]
       const filepath = path.join(this.confdir, (mqtt_topic || ip) + '.json')
 
       try {
@@ -267,12 +291,30 @@ module.exports = function (RED) {
       const config = JSON.parse(fs.readFileSync(filepath, 'utf8'));
       if (!mqtt_topic && config?.mqtt_topic) {
         fs.renameSync(filepath, path.join(this.confdir, config.mqtt_topic + '.json'))
-        if (this.mqttMap) {
-          this.mqttMap[ip] = config.mqtt_topic
-          const sorted = Object.keys(this.mqttMap).sort().reduce((acc, key) => ({...acc, [key]: this.mqttMap[key]}), {})
-          this.mqttMap = sorted
-          fs.createWriteStream(this.mqttMapPath).write(JSON.stringify(this.mqttMap, null, 2));
+        this.mqttMap[ip] = config.mqtt_topic
+        // check/update device ip by host
+        const dbDevice = this.devicesDb.findTableRaw('devices', 'host', config.hostname)
+        if (dbDevice) {
+          // compare and update existing device
+          if (config.ip_address[0] && (dbDevice.ip !== config.ip_address[0])) {
+            dbDevice.ip = config.ip_address[0]
+            this.devicesDb.save(true)
+          }
         }
+        else {
+          this._addDbDevice({
+            host: config.hostname, 
+            ip: config.ip_address[0], 
+            name: config.friendlyname[0]
+          })
+        }
+  
+        if (this.devices[hostname] !== ip) {
+          this.hosts[hostname] = ip
+        }
+        const sorted = Object.keys(this.mqttMap).sort().reduce((acc, key) => ({...acc, [key]: this.mqttMap[key]}), {})
+        this.mqttMap = sorted
+        fs.createWriteStream(this.mqttMapPath).write(JSON.stringify(this.mqttMap, null, 2));
       }
       return config
     }
@@ -300,7 +342,6 @@ module.exports = function (RED) {
 
     async scanNetwork() {
       if (!this.config.network) return this.error('Network not configured')
-      if (!this.mqttMap) this.loadMqttMap()
       try{
         const parts = this.config.network.split('/')
         const ipBytes = parts[0].split('.')
@@ -336,25 +377,34 @@ module.exports = function (RED) {
     }
 
     registerDevice(device) {
-      if (!device.config.ip) return
+      this.devices[device.config.id] = device
+      if (!device.config.ip) return //TODO host
       const dbDevice = this.devicesDb.findTableRaw('devices', 'ip', device.config.ip)
       if (dbDevice) {
         let dirty = false
-        // compare and update existing device
+        // TODO compare and update existing device
         if (dirty) this.devicesDb.save(true)
         return
       }
-      if (!this.devicesDb.data) return
-      const db = this.devicesDb.data
+      // add new DB device
+      this._addDbDevice(device.config) //host, ip, mac, name, group, version
+    }
+
+    unregisterDevice(device) {
+      delete this.devices[device.config.id]
+    }
+
+    _addDbDevice(config) {
+      const db = this.dbDevices
       db['devices'] = db['devices'] || []
-      const group = device.config.group && db['groups'].find(row => (row['name'] === device.config.group))
+      const group = config.group && db['groups'].find(row => (row['name'] === config.group))
       db['devices'].push({
-        fw: device.config.version || 1,
+        fw: config.version || 1,
         grp: group?.idx || this.grp,
-        host: device.config.host,
-        ip: device.config.ip,
-        mac: device.config.mac,
-        name: device.config.name
+        host: config.host,
+        ip: config.ip,
+        mac: config.mac || '',
+        name: config.name
       })
       this.devicesDb.save(true)
     }
@@ -362,32 +412,51 @@ module.exports = function (RED) {
     findAP(bssid) {
       const ap = this.devicesDb && this.devicesDb.findTableRaw('devices', 'mac', bssid, true)
       if (ap) return ap
-      if (!this.devicesDb.data) return
-      const db = this.devicesDb.data
+      const db = this.dbDevices
       db['devices'] = db['devices'] || []
       db['devices'].push({ mac: bssid })
       this.devicesDb.save(true)
     }
 
-    getDbDevices() {
-      return this.devicesDb.data && this.devicesDb.data['devices'].filter((el) => el.fw)
+    listDevices() {
+      const arr = []
+      for(let ip in this.mqttMap) {
+        const opt = {}
+        this.mqttMap[ip] && arr.push((opt[this.mqttMap[ip]] = ip, opt))
+      }
+      return arr
+    }
+
+    listDeviceNodes() {
+      const arr = []
+      for(let id in this.devices) {
+        const opt = {}
+        const device = this.devices[id].config 
+        arr.push((opt[device.name || device.host] = id, opt))
+      }
+      return arr
     }
 
     listDbDevices(field) {
       const arr = []
-      if (!this.devicesDb.data) return arr
+      let opt
       switch (field) {
       case 'ip':
-        this.devicesDb.data['devices'].forEach((el) => (el.fw && el.ip && arr.push(el.ip)))
+        this.dbDevices['devices'].forEach((el) => (el.fw && el.ip && arr.push(
+          this.mqttMap[el.ip] && (opt = {}, opt[this.mqttMap[el.ip]] = el.ip, opt) || el.ip)))
         return arr
       case 'host':
-        this.devicesDb.data['devices'].forEach((el) => (el.fw && el.host && (el.host !== '?') && arr.push(el.host)))
+        this.dbDevices['devices'].forEach((el) => (el.fw && el.host && (el.host !== '?') && arr.push(
+          el.ip && this.mqttMap[el.ip] && (opt = {}, opt[this.mqttMap[el.ip]] = el.host, opt) || el.host)))
         return arr
       default:
-        if (!this.mqttMap) this.loadMqttMap()
-        this.devicesDb.data['devices'].forEach((el) => (el.fw && el.ip && this.mqttMap[el.ip] && arr.push(this.mqttMap[el.ip])))
+        this.dbDevices['devices'].forEach((el) => (el.fw && el.ip && this.mqttMap[el.ip] && arr.push(this.mqttMap[el.ip])))
         return arr
       }
+    }
+
+    getDbDevices() {
+      return this.dbDevices['devices'].filter((el) => el.fw)
     }
 
     getRequest(url, json, timeout) {

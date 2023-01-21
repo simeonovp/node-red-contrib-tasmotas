@@ -15,7 +15,7 @@ module.exports = function (RED) {
 
         switch (msg.action) {
         case 'backupResources':
-          //TODO
+          this.manager.backupResources(msg.payload || './backup')
           break
         case 'loadMqttMap':
           msg.payload = this.manager.loadMqttMap()
@@ -24,8 +24,14 @@ module.exports = function (RED) {
           if (!msg.bssid && !msg.topic)  return done('BSSID not selected')
           msg.payload = this.manager.findAP(msg.bssid || msg.topic)
           break
+        case 'listDevices':
+          msg.payload = this.manager.listDevices()
+          break
+        case 'listDeviceNodes':
+          msg.payload = this.manager.listDeviceNodes()
+          break
         case 'listDbDevices':
-          msg.payload = this.manager.listDbDevices(msg.payload || 'mqtt')
+          msg.payload = this.manager.listDbDevices(msg.payload)
           break
         case 'getDbDevices':
           msg.payload = this.manager.getDbDevices()
