@@ -86,7 +86,7 @@ module.exports = function (RED) {
 
     onDeviceOnline () {
       // Publish a start command to get the current state of the device
-      this.MQTTPublish('cmnd', 'State')
+      this.mqttCommand('State')
     }
 
     onNodeInput (msg) {
@@ -160,15 +160,15 @@ module.exports = function (RED) {
           case '1':
           case 'on':
           case 'true':
-            this.MQTTPublish('cmnd', 'POWER', onValue)
+            this.mqttCommand('POWER', onValue)
             break
           case '0':
           case 'off':
           case 'false':
-            this.MQTTPublish('cmnd', 'POWER', offValue)
+            this.mqttCommand('POWER', offValue)
             break
           case 'toggle':
-            this.MQTTPublish('cmnd', 'POWER', toggleValue)
+            this.mqttCommand('POWER', toggleValue)
             break
           default:
             this.warn('Invalid value for the \'on\' command (should be: true/false, 1/0, on/off or toggle)')
@@ -178,9 +178,9 @@ module.exports = function (RED) {
       // rgb: array[r,g,b] or string "r,g,b" (0-255, 0-255, 0-255)
       if (rgb !== undefined) {
         if (typeof rgb === 'string') {
-          this.MQTTPublish('cmnd', this.colorCmnd, rgb)
+          this.mqttCommand(this.colorCmnd, rgb)
         } else if (Array.isArray(rgb) && rgb.length === 3) {
-          this.MQTTPublish('cmnd', this.colorCmnd, rgb.toString())
+          this.mqttCommand(this.colorCmnd, rgb.toString())
         } else {
           this.warn('Invalid value for the \'rgb\' command (should be: [r,g,b] [0-255, 0-255, 0-255])')
         }
@@ -189,9 +189,9 @@ module.exports = function (RED) {
       // hsb: array[h,s,b] or string "h,s,b" (0-360, 0-100, 0-100)
       if (hsb !== undefined) {
         if (typeof hsb === 'string') {
-          this.MQTTPublish('cmnd', 'HsbColor', hsb)
+          this.mqttCommand('HsbColor', hsb)
         } else if (Array.isArray(hsb) && hsb.length === 3) {
-          this.MQTTPublish('cmnd', 'HsbColor', hsb.toString())
+          this.mqttCommand('HsbColor', hsb.toString())
         } else {
           this.warn('Invalid value for the \'hsb\' command (should be: [h,s,b] [0-360, 0-100, 0-100])')
         }
@@ -202,7 +202,7 @@ module.exports = function (RED) {
         if (typeof hex === 'string') {
           hex = (hex[0] === '#') ? hex : '#' + hex
           if (hex.length === 5 || hex.length === 7 || hex.length === 9 || hex.length === 11) {
-            this.MQTTPublish('cmnd', this.colorCmnd, hex)
+            this.mqttCommand(this.colorCmnd, hex)
           } else {
             this.warn('Invalid length for the \'hex\' command (should be: #CWWW, #RRGGBB, #RRGGBBWW or #RRGGBBCWWW)')
           }
@@ -216,7 +216,7 @@ module.exports = function (RED) {
         if (typeof color === 'string') {
           const colorCode = TASMOTA_COLORS[color.replace(/\s/g, '').toLowerCase()]
           if (colorCode !== undefined) {
-            this.MQTTPublish('cmnd', this.colorCmnd, colorCode)
+            this.mqttCommand(this.colorCmnd, colorCode)
           } else {
             this.warn('Invalid value for the \'color\' command (should be a color name or +/-)')
           }
@@ -231,7 +231,7 @@ module.exports = function (RED) {
         if (isNaN(bright) || bright < 0 || bright > 100) {
           this.warn('Invalid value for the \'bright\' command (should be: 0-100)')
         } else {
-          this.MQTTPublish('cmnd', 'Dimmer', bright.toString())
+          this.mqttCommand('Dimmer', bright.toString())
         }
       }
 
@@ -241,13 +241,13 @@ module.exports = function (RED) {
         if (isNaN(ct)) {
           this.warn('Invalid value for the \'ct\' command (should be: 0-100, 2000-6500 or 500-153)')
         } else if (ct >= 153 && ct <= 500) { // ct in mired (cold to warm)
-          this.MQTTPublish('cmnd', 'CT', ct.toString())
+          this.mqttCommand('CT', ct.toString())
         } else if (ct >= 0 && ct <= 100) { // ct in percent (warm to cold)
           ct = percent2mired(ct)
-          this.MQTTPublish('cmnd', 'CT', ct.toString())
+          this.mqttCommand('CT', ct.toString())
         } else if (ct >= 2000 && ct <= 6500) { // ct in kelvin (warm to cold)
           ct = kelvin2mired(ct)
-          this.MQTTPublish('cmnd', 'CT', ct.toString())
+          this.mqttCommand('CT', ct.toString())
         } else {
           this.warn('Invalid value for the \'ct\' command (should be: 0-100, 2000-6500 or 500-153)')
         }

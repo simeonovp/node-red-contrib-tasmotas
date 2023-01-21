@@ -97,7 +97,7 @@ module.exports = function (RED) {
       })
 
       if (device.isOnline) {
-        this.device.MQTTPublish('cmnd', 'POWER' +  this.channel)
+        this.device.mqttCommand('POWER' +  this.channel)
         startTimer()
       }
     }
@@ -144,14 +144,14 @@ module.exports = function (RED) {
         const diff = (timestamp - this.lastTime)
         if (diff > this.debounce) {
           this.lastTime = timestamp
-          this.device.MQTTPublish('cmnd', 'POWER' +  this.channel, val && onValue || offValue)
+          this.device.mqttCommand('POWER' +  this.channel, val && onValue || offValue)
         }
         else if (!this.debTimer) {
           this.debTimer = setTimeout(()=>{ 
             clearTimeout[this.debTimer]
             this.debTimer = null
             this.lastTime = Date.now()
-            this.device.MQTTPublish('cmnd', 'POWER' +  this.channel, val && onValue || offValue)
+            this.device.mqttCommand('POWER' +  this.channel, val && onValue || offValue)
           }, this.debounce - diff)
         }
         } 
@@ -159,7 +159,7 @@ module.exports = function (RED) {
           this.warn('Debounce exeption' + err)
         }
       }
-      else this.device.MQTTPublish('cmnd', 'POWER' +  this.channel, val && onValue || offValue)
+      else this.device.mqttCommand('POWER' +  this.channel, val && onValue || offValue)
     }
 
     requestTimer(timeout) {
@@ -169,7 +169,7 @@ module.exports = function (RED) {
         value = ((sec > 11) ? (sec + 100) : (sec * 10)).toString()
       }
 
-      this.device.MQTTPublish('cmnd', 'PulseTime' +  this.channel, value)
+      this.device.mqttCommand('PulseTime' +  this.channel, value)
     }
 
     startTimer() {
@@ -219,7 +219,7 @@ module.exports = function (RED) {
     }
 
     command(cmd, val) {
-      this.device.MQTTPublish('cmnd', ShutterPrefix + cmd + this.channel, val)
+      this.device.mqttCommand(ShutterPrefix + cmd + this.channel, val)
     }
 
     requestPosition() {
@@ -327,7 +327,7 @@ module.exports = function (RED) {
         if (!this.deviceConfig) return
       }
 
-      this.MQTTPublish('cmnd', 'STATUS', '11')
+      this.mqttCommand('STATUS', '11')
     }
 
     _onMqttStatus(command, payload) {
@@ -437,7 +437,7 @@ module.exports = function (RED) {
 
     onDeviceOnline () {
       if (this.config.ip) this.downloadConfig()
-      else this.MQTTPublish('cmnd', 'STATUS', '5')
+      else this.mqttCommand('STATUS', '5')
       this.emit('mqtt', 'DeviceOnline')
     }
 
@@ -516,6 +516,10 @@ module.exports = function (RED) {
       }
     }
 
+    mqttCommand(command, payload) {
+      this.MQTTPublish('cmnd', command, payload)
+    }
+
     MQTTPublish(prefix, command, payload) {
       const fullTopic = this.buildFullTopic(prefix, command)
       const options = {
@@ -552,105 +556,5 @@ module.exports = function (RED) {
     }
   }
 
-  class DbBase {
-    constructor(config, manifest) {
-      this.config = config || {}
-      this.data = undefined
-      this.manifest = manifest
-  
-      this.downloadPending = false
-      this.load()
-    }
-
-    updateManifest(key, json) {
-      if (!this.manifest) return
-      this.manifest.data = this.manifest.data || {}
-      const fileManifest = this.manifest.data[key] || {}
-      if (fileManifest.length && json.length && (fileManifest.length === json.length) && (fileManifest.hash === this.hashCode(json))) return
-      fileManifest.length = json.length
-      fileManifest.hash = this.hashCode(json)
-      fileManifest.date = new Date()
-      this.manifest.data[key] = fileManifest
-      this.manifest.save(true)
-    }
-
-    load() {
-      if (!this.config.path || !fs.existsSync(this.config.path)) return
-      const json = fs.readFileSync(this.config.path, 'utf8') || {}
-      this.data = JSON.parse(json)
-    }
-  
-    save(overwrite) {
-      if (!this.config.path) return;
-      if (overwrite || !fs.existsSync(this.config.path)) {
-        const json = JSON.stringify(this.data, null, 2)
-        fs.createWriteStream(this.config.path).write(json)
-        this.updateManifest(this.config.path, json)
-      }
-    }
-  
-    download(skipIfSame = false) {
-      const url = this.config.url
-      if (!url) return
-      if (this.downloadPending) return
-      this.downloadPending = true
-      return new Promise((resolve, reject) => {
-        request(url, { json: true }, (err, resp, data) => {
-          if (err || (resp && resp.statusCode >= 400) || !data) {
-            console.warn('Failed to get ' + url)
-            reject (err ? err : resp.statusCode)
-            this.downloadPending = false
-            return;
-          }
-          
-          const json = JSON.stringify(data, null, 2)
-          const manifest = this.manifest?.data
-          const length = manifest && manifest[url]?.length || 0
-          const hash = manifest && manifest[url]?.hash || 0
-          if (skipIfSame && length && json.length && (length === json.length) && (hash === this.hashCode(json))) {
-            resolve()
-            this.downloadPending = false
-            return;
-          }
-
-          this.data = data
-          this.updateManifest(url, json)
-          resolve(json)
-          this.downloadPending = false
-        });
-      });
-    }
-    
-    hashCode(string) {
-      let hash = 0
-      for (let i = 0; i < string.length; i++) {
-        let code = string.charCodeAt(i)
-        hash = ((hash << 5) - hash) + code;
-        hash = hash & hash; // Convert to 32bit integer
-      }
-      return hash;
-    }
-
-
-    getTable(table) {
-      return this.data && this.data[table]
-    }
-  
-    findTableRaw(table, col, val, ignorecase = false) {
-      const arr = this.getTable(table)
-      if (ignorecase) {
-        val = val.toUpperCase()
-        return arr && arr.find(row => (row[col].toUpperCase() === val))
-      }
-      return arr && arr.find(row => (row[col] === val))
-    }
-  
-    getTableRawIndex(table, col, val) {
-      const arr = this.getTable(table)
-      return arr && arr.findIndex(row => (row[col] === val))
-    }
-  
-  }
-  
   RED.nodes.registerType('tasmota-device', TasmotaDevice)
 }

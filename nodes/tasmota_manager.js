@@ -158,7 +158,6 @@ module.exports = function (RED) {
       })
 
       this.on('close', (done)=>{
-        this.log(`-- this.rf433DbDirty:${this.rf433DbDirty} `)
         if (this.rf433DbDirty) this.rf433Db.save(true)
         done()
       })
@@ -266,13 +265,11 @@ module.exports = function (RED) {
     }
 
     saveRf433Codes(onClose) {
-      this.log(`-- saveRf433Codes(${onClose}) `)
       if (onClose) this.rf433DbDirty = true
       else this.rf433Db.save(true)
     }
     
     onRfReceived(bridge, time, data) {
-      this.log('-- RfReceived')
       this.emit('rf-received', bridge, time, data)
     }
 
@@ -383,7 +380,7 @@ module.exports = function (RED) {
     }
 
     registerDevice(device) {
-      this.devices[device.config.id] = device
+      this.devices[device.id] = device
       if (!device.config.ip) return //TODO host
       const dbDevice = this.devicesDb.findTableRaw('devices', 'ip', device.config.ip)
       if (dbDevice) {
@@ -397,7 +394,7 @@ module.exports = function (RED) {
     }
 
     unregisterDevice(device) {
-      delete this.devices[device.config.id]
+      delete this.devices[device.id]
     }
 
     _addDbDevice(config) {
@@ -461,6 +458,13 @@ module.exports = function (RED) {
       }
     }
 
+    getMqttDevice(topic) {
+      for(let id in this.devices) {
+        const device = this.devices[id]
+        if (device.config.device == topic) return device
+      }
+    }
+
     getDbDevices() {
       return this.dbDevices['devices'].filter((el) => el.fw)
     }
@@ -477,6 +481,11 @@ module.exports = function (RED) {
           resolve(data)
         });
       });
+    }
+
+    mqttCommand(device, command, payload) {
+      const tasmota = this.getMqttDevice(device)
+      tasmota && tasmota.mqttCommand(command, payload)
     }
 
     async httpCommand(ip, cmnd, val, timeout) {

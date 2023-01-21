@@ -29,12 +29,17 @@ module.exports = function (RED) {
       if (!this.defaultBridge) this.defaultBridge = bridge
       if (this.debounce) {
         //filter same event receiver over multiple bridges
-        const lastTime = lastTimes[data.Data] || 0
-        lastTimes[data.Data] = timestamp
+        const lastTime = this.lastTimes[data.Data] || 0
+        this.lastTimes[data.Data] = timestamp
         if ((timestamp - lastTime) < this.debounce) return
       }
       //this.log('-- emit ' + data.Data)
       this.emit(data.Data, { bridge, time, data })
+    }
+
+    sendRfCode(bridge, timings, code) {
+      const payload = `RfSync ${timings.Sync}; RfLow ${timings.Low}; RfHigh ${timings.High}; RfCode ${parseInt(code, 16)}`
+      this.manager?.mqttCommand(bridge, 'Backlog', payload)
     }
 
     saveCodes(group, name, codes) {

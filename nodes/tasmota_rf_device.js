@@ -17,7 +17,16 @@ module.exports = function (RED) {
       this.lastBridge = config.bridge || manager.defaultBridge || ''
 
       this.on('input', (msg, send, done) => {
-        //TODO
+        if (!this.config.canReceive) return
+
+        const bridge = msg.bridge || config.bridge || this.lastBridge
+        const timings = this.timings[bridge] && {...this.timings[bridge], ...msg.timings}
+        const getCode = (name) => {
+          for(let code in this.codes) { if (this.codes[code].name === name) return code }
+        }
+        const code = msg.code || getCode(msg.payload)
+        bridge && timings && code && manager.sendRfCode(bridge, timings, code)
+        done(msg)
       })
  
       // Deregister from DeviceNode when this node is deleted or restarted

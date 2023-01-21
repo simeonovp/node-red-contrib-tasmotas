@@ -135,19 +135,19 @@ class TasmotaBase {
     if (typeof payload === 'string') {
       // 1. string payload: 'CMD <param>'
       const [cmd, param] = payload.split(' ', 2)
-      this.MQTTPublish('cmnd', cmd, param)
+      this.mqttCommand(cmd, param)
     } else if (Array.isArray(payload)) {
       // 2. list payload: ['CMD <param>', 'CMD <param>', ...]
       for (let i = 0; i < payload.length; i++) {
         const [cmd, param] = payload[i].split(' ', 2)
-        this.MQTTPublish('cmnd', cmd, param)
+        this.mqttCommand(cmd, param)
       }
     } else if (typeof payload === 'object') {
       // 3. object payload: {'CMD': 'param', 'CMD': 'param', ...}
       for (const cmd in payload) {
         if (Object.prototype.hasOwnProperty.call(payload, cmd)) {
           const param = payload[cmd]
-          this.MQTTPublish('cmnd', cmd, param)
+          this.mqttCommand(cmd, param)
         }
       }
     } else {
@@ -175,6 +175,10 @@ class TasmotaBase {
         text: isOnline && LWT_ONLINE || LWT_OFFLINE
       })
     }
+  }
+
+  mqttCommand(command, payload) {
+    this.deviceNode.mqttCommand(command, payload)
   }
 
   MQTTPublish(prefix, command, payload) {
