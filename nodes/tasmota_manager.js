@@ -148,7 +148,6 @@ module.exports = function (RED) {
       this.io
       this.ev = new events.EventEmitter()
       this.ev.setMaxListeners(0)
-      this.rfManager
 
       this.on('input', (msg, send, done) => {
         switch (msg.topic) {
@@ -159,7 +158,8 @@ module.exports = function (RED) {
       })
 
       this.on('close', (done)=>{
-        if (this.rf433DbDirty) this.rf433Db.save()
+        this.log(`-- this.rf433DbDirty:${this.rf433DbDirty} `)
+        if (this.rf433DbDirty) this.rf433Db.save(true)
         done()
       })
 
@@ -266,10 +266,16 @@ module.exports = function (RED) {
     }
 
     saveRf433Codes(onClose) {
+      this.log(`-- saveRf433Codes(${onClose}) `)
       if (onClose) this.rf433DbDirty = true
-      else this.rf433Db.save()
+      else this.rf433Db.save(true)
     }
     
+    onRfReceived(bridge, time, data) {
+      this.log('-- RfReceived')
+      this.emit('rf-received', bridge, time, data)
+    }
+
     async downloadConfig(ip, force = false) {
       const mqtt_topic = this.mqttMap[ip]
       const filepath = path.join(this.confdir, (mqtt_topic || ip) + '.json')

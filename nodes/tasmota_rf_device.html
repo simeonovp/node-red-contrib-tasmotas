@@ -71,7 +71,6 @@
     oneditprepare: function () {
       const self = this
       const rf433Db = (() => {
-        console.log('-- load rf433Db')
         const get = (url) => {
           const Httpreq = new XMLHttpRequest() // a new request
           Httpreq.open('GET', url, false)
@@ -93,7 +92,6 @@
       })()
 
       const fillCodes = (codes) => {
-        console.log('-- fillCodes, codes:' + JSON.stringify(codes))
         $('#rf-codes > tbody').html('')
         const ilist = []
         for (let code in codes) {
@@ -106,19 +104,16 @@
       }
 
       const updateCodes = () => {
-        console.log('-- updateCodes')
         let codes = {}
         if (rf433Db) {
           const group = self.group || 'default'
           const device = rf433Db[group]?.find(dbDevice => (dbDevice.name === self.name))
           codes = device?.codes || {}
-          console.log(`-- call fillCodes, group:${group}, device:${JSON.stringify(device)}`)
         }
         fillCodes(codes)
       }
       
       const updateBridges = () => {
-        console.log('-- updateBridges, bridge:' + self.bridge)
         $('#list-avail-bridges').html('')
         const rlist = []
         let bridge
@@ -127,7 +122,7 @@
           const device = rf433Db[group]?.find(dbDevice => (dbDevice.name === self.name))
           if (device?.timimgs) {
             for (let dbBridge in device.timimgs) {
-              rlist.push(`<option value='${self.dbBridge}'></option>`)
+              rlist.push(`<option value='${dbBridge}'></option>`)
               if (self.bridge == dbBridge) bridge = dbBridge
             }
           }
@@ -136,7 +131,6 @@
       }
 
       const updateDevices = () => {
-        console.log('-- updateDevices, name:' + self.name)
         $('#list-avail-devices').html('')
         const rlist = []
         if (rf433Db) {
@@ -155,8 +149,7 @@
         }
       }
 
-      const updateGroups = (() => {
-        console.log('-- updateGroups, group:' + self.group)
+      const updateGroups = () => {
         $('#list-avail-groups').html('')
         const rlist = []
         let group
@@ -168,9 +161,8 @@
           $('#list-avail-groups').append(rlist.join(''))
           $('#node-input-group').val(group || '')
         }
-      })()
+      }
 
-      if (this.codes) fillCodes(JSON.parse(this.codes))
       $('#btn-add-code').click(() => {
         $('#rf-codes > tbody').append(`<tr>
             <td ><input type="text"></td>
@@ -180,7 +172,6 @@
 
       $('#node-input-name').change(() => {
         const val = $('#node-input-name').val()
-        console.log(`-- change name from "${self.name}" to "${val}"`)
         if (self.name !== val) {
           self.name = val
           updateBridges()
@@ -190,7 +181,6 @@
 
       $('#node-input-group').change(() => {
         const val = $('#node-input-group').val()
-        console.log(`-- change group from "${self.group}" to "${val}"`)
         if (self.group !== val) {
           self.group = val
           updateDevices()
@@ -199,8 +189,12 @@
 
       $('#node-input-bridge').change(() => {
         self.bridge = $('#node-input-bridge').val()
-        console.log('-- change bridge:' + self.bridge)
       })
+    
+      updateGroups()
+      updateDevices()
+      updateBridges()
+      if (this.codes) fillCodes(JSON.parse(this.codes))
     },
     oneditsave: function() {
       const codes = {}
@@ -208,7 +202,6 @@
       $('#rf-codes tbody').find("tr").each((index, row) => {
         $(row).find('input').each((index, element) => {
           const colVal = $(element).val()
-          console.log(`-- save input idx:${index}, val:${colVal}`)
           switch(index) {
           case 0:
             name = (colVal !== '?') && colVal
@@ -220,7 +213,6 @@
         })
       })
       this.codes = JSON.stringify(codes)
-      console.log(`-- save codes: ${this.codes}`)
     }
   })
 </script>

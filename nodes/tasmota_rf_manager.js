@@ -9,14 +9,21 @@ module.exports = function (RED) {
       RED.nodes.createNode(this, config)
       this.config = config
       this.manager = config.manager && RED.nodes.getNode(config.manager)
+      this.manager?.addListener('rf-received', this._onRfReceived.bind(this))
       this.defaultBridge = ''
       this.debounce = parseInt(config.debounce) || 0 // 1s
       this.rf433Data = this.manager?.getRf433Codes()
+      //this.setMaxListeners(100)
 
       this.lastTimes = {}
+    
+      this.on('close', (done) => {
+        this.manager?.removeListener('rf-received', this._onRfReceived.bind(this))
+        done()
+      })
     }
 
-    onRfReceived(bridge, time, data) {
+    _onRfReceived(bridge, time, data) {
       //Example: RfReceived":{"Sync":12570,"Low":430,"High":1210,"Data":"E5CD7E","RfKey":"None"}
       const timestamp = Date.now()
       if (!this.defaultBridge) this.defaultBridge = bridge
@@ -26,6 +33,7 @@ module.exports = function (RED) {
         lastTimes[data.Data] = timestamp
         if ((timestamp - lastTime) < this.debounce) return
       }
+      //this.log('-- emit ' + data.Data)
       this.emit(data.Data, { bridge, time, data })
     }
 
@@ -36,7 +44,7 @@ module.exports = function (RED) {
       if (!devices.length) {
         this.rf433Data[group] = devices
         dirty = true
-        this.warn(`-- add group ${group}`)
+        this.warn(`Add group ${group}`)
       }
       const codesEqual = (code1, code2) => {
         return (code1.name === code2.name)
@@ -47,14 +55,14 @@ module.exports = function (RED) {
           if (!device.codes[code] || !codesEqual(device.codes[code], codes[code])) {
             device.codes[code] = codes[code]
             dirty = true
-            this.warn(`-- device ${name} code ${code} changed from "${JSON.stringify(device.codes[code])}" to "${JSON.stringify(codes[code])}"`)
+            this.warn(`Device ${name} code ${code} changed from "${JSON.stringify(device.codes[code])}" to "${JSON.stringify(codes[code])}"`)
           }
         }
       }
       else {
         devices.push({ name, codes })
         dirty = true
-        this.warn(`-- add device ${name}`)
+        this.warn(`Add device ${name}`)
       }
       //save if changed
       if (dirty) this.manager.saveRf433Codes()
@@ -77,7 +85,7 @@ module.exports = function (RED) {
         if (!device.timimgs[bridge] || !timimgsEqual(device.timimgs[bridge], timings[bridge])) {
           device.timimgs[bridge] = timings[bridge]
           dirty = true
-          this.warn(`-- device ${name} timing for bridge ${bridge} changed from "${JSON.stringify(device.timimgs[bridge])}" to "${JSON.stringify(timings[bridge])}"`)
+          this.warn(`Device ${name} timing for bridge ${bridge} changed from "${JSON.stringify(device.timimgs[bridge])}" to "${JSON.stringify(timings[bridge])}"`)
         }
       }
 

@@ -11,12 +11,10 @@ module.exports = function (RED) {
       const manager = config.manager && RED.nodes.getNode(config.manager)
       if (manager) {
         manager.saveCodes(config.group, config.name, this.codes)
-        for(let code in this.codes) manager.addListener('mqtt', this._onRfReceive.bind(this))
+        for(let code in this.codes) manager.addListener(code, this._onRfReceive.bind(this))
       }
       this.timings = manager?.getTimings(config.group, config.name) || {}
       this.lastBridge = config.bridge || manager.defaultBridge || ''
-
-      this.log('-- codes:' + config.codes)
 
       this.on('input', (msg, send, done) => {
         //TODO
@@ -25,28 +23,27 @@ module.exports = function (RED) {
       // Deregister from DeviceNode when this node is deleted or restarted
       this.on('close', (done) => {
         if (manager) {
-          for( let code in this.codes) manager.removeListener('mqtt', this._onRfReceive.bind(this))
+          for( let code in this.codes) manager.removeListener(code, this._onRfReceive.bind(this))
           if (config.canReceive) manager.saveTimings(config.group, config.name, this.timings)
         }
         done()
       })
     }
 
-    _onRfReceive(code, msg) {
+    _onRfReceive(msg) {
       if (this.config.canReceive) {
         this.lastBridge = msg.bridge
-        const bridge = timings[msg.bridge]
+        const bridge = this.timings[msg.bridge]
         if (bridge) {
           // TODO check/save timings
         }
         else {
           const { Sync, Low, High } = msg.data
-          timings[msg.bridge] = { Sync, Low, High }
-          this.log(`-- learn bridge:${msg.bridge}, ${JSON.stringify(timings[msg.bridge])}`)
+          this.timings[msg.bridge] = { Sync, Low, High }
         }
       }
 
-      msg.payload = this.codes[key]?.name
+      msg.payload = this.codes[msg.data.Data]?.name
       this.send(msg)
     }
   }
