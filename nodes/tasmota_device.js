@@ -96,6 +96,13 @@ module.exports = function (RED) {
         }
       })
 
+      device.mqttSubscribeStat(device, 'STATUS11', (topic, mqttPayloadBuf) => {
+        const payload = mqttPayloadBuf.toString()
+        const data = payload && JSON.parse(payload)
+        const power = data?.StatusSTS && data.StatusSTS['POWER' + this.channel]
+        power && this.onPower(topic, power)
+      })
+
       if (device.isOnline) {
         this.device.mqttCommand('POWER' +  this.channel)
         startTimer()
@@ -474,6 +481,8 @@ module.exports = function (RED) {
       }
       else {
         //regiter tele subGroup on demand
+        if (!this.subGroups.cmnd && topic.includes(this.config.cmndPrefix)) return this.mqttSubscribeCmnd(this, 'STATUS')
+        if (!this.subGroups.tele && topic.includes(this.config.telePrefix)) return this.mqttSubscribeTete(this)
         if (topic.includes(this.config.telePrefix) || topic.includes(this.config.cmndPrefix)
           || topic.includes('STATUS') || topic.includes('RESULT')) return
         this.warn(`_onMqttMessage topic:${topic}, subGroups:${JSON.stringify(this.subGroups)}`)
