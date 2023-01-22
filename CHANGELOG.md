@@ -1,6 +1,10 @@
 -------------------
 v1.0.2
 -------------------
+ - Fixed error in sensor subscription 
+ -------------------
+v1.0.2
+-------------------
  - Fixed critical error on using tasmota-manager (Project)
 -------------------
 v1.0.1
