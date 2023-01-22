@@ -13,17 +13,18 @@ module.exports = function (RED) {
 
       // Subscribe to STAT messages (all or just RESULT)
       if (this.config.subscribeToStat) {
-        this.MQTTSubscribe('stat', '+', (topic, payload) => {
+        this.mqttSubscribeStat('+', (topic, payload) => {
           this.onMqttMessage(topic, payload)
         })
-      } else {
-        this.MQTTSubscribe('stat', 'RESULT', (topic, payload) => {
+      } 
+      else {
+        this.mqttSubscribeStat('RESULT', (topic, payload) => {
           this.onMqttMessage(topic, payload)
         })
       }
       // Subscribe to TELE messages (if requested)
       if (this.config.subscribeToTele) {
-        this.MQTTSubscribe('tele', '+', (topic, payload) => {
+        this.mqttSubscribeTele('+', (topic, payload) => {
           this.onMqttMessage(topic, payload)
         })
       }

@@ -1,0 +1,68 @@
+<script type="text/html" data-template-name="tasmota-rf-bridge">
+  <div class="form-row">
+    <label for="node-input-device"><i class="fa fa-dot-circle-o"></i> Device</label>
+    <input type="text" id="node-input-device">
+  </div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name">
+  </div>
+  <div class="form-row">
+    <label for="node-input-uidisabler"><i class="fa fa-bar-chart"></i> Dashboard</label>
+    <label for="node-input-uidisabler" style="width:70%">
+      <input type="checkbox" id="node-input-uidisabler"
+        style="display:inline-block; width:22px; vertical-align:baseline;">
+      Send enable/disable message
+    </label>
+  </div>
+  <hr>
+  <div class="form-row">
+    <label for="node-input-canReceive" style="width:70%">
+      <input type="checkbox" id="node-input-canReceive" style="display:inline-block; width:15px; vertical-align:baseline;">
+      Can receive
+    </label>
+  </div>
+</script>
+
+<script type="text/html" data-help-name="tasmota-rf-bridge">
+  <p>A node to access a RF bridge devices running the <b>Tasmota</b> firmware.</p>
+  <p>It can be used to send row RF codes over the msg.payload as hexadecimal string. 
+    In this case the message most contains the definition of the RF433 timings. 
+    E.g. msg.timings = { Sync: 12030, Low: 420, High: 1190 } </p>
+  <p>If "Can Receive" is checked the node receive the row codes from bridge device.
+    In this case the message payload contains an object with the RF timings and code. </p>
+  <p>This node can be used without send and receive. It will activate the bridge device
+    functionality for receiving the interpreted codes over the "RF Device" nodes </p>
+</script>
+
+<script type="text/javascript">
+  RED.nodes.registerType('tasmota-rf-bridge', {
+    category: 'tasmota',
+    color: '#10AF80',
+    defaults: {
+      // inherited from tasmota-base
+      device: { type: 'tasmota-device', required: true },
+      name: { value: '' },
+      sendDevice: { value: true },
+      uidisabler: { value: false },
+      canReceive: { value: false }
+    },
+    icon: 'tasmota-rf-bridge.svg',
+    paletteLabel: 'RF Bridge',
+    inputs: 1,
+    outputs: 1,
+    label: function() {
+      return this.name || RED.nodes.node(this.device)?.device || 'RF Bridge'
+    },
+    labelStyle: function() {
+      return this.name ? 'node_label_italic' : ''
+    },
+    oneditprepare: function () {
+      if (!this.device) $('#node-input-device').val('_ADD_')
+      $('#node-input-name').attr('placeholder', $('#node-input-device option:selected').text())
+      $('#node-input-device').on('change', function() {
+        $('#node-input-name').attr('placeholder', $('#node-input-device option:selected').text())
+      })
+    }
+  })
+</script>

@@ -181,12 +181,12 @@ class TasmotaBase {
     this.deviceNode.mqttCommand(command, payload)
   }
 
-  MQTTPublish(prefix, command, payload) {
-    this.deviceNode.MQTTPublish(prefix, command, payload)
+  mqttSubscribeTele(command, callback) {
+    this.deviceNode.mqttSubscribeTele(this, command, callback)
   }
 
-  MQTTSubscribe(prefix, command, callback) {
-    this.deviceNode.MQTTSubscribe(this, prefix, command, callback)
+  mqttSubscribeStat(command, callback) {
+    this.deviceNode.mqttSubscribeStat(this, command, callback)
   }
 
   extractChannelNum(str) {

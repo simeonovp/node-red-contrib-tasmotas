@@ -12,30 +12,30 @@ module.exports = function (RED) {
       super(config, RED, SENSOR_DEFAULTS)
 
       // Subscribe to device telemetry changes  tele/<device>/SENSOR
-      this.MQTTSubscribe('tele', 'SENSOR', (topic, payload) => {
+      this.mqttSubscribeTele('tele', 'SENSOR', (topic, payload) => {
         //tasmota/sc_01/tele/SENSOR = {"Time":"2023-01-08T07:20:34","SonoffSC":{"Temperature":23.0,"Humidity":44.0,"DewPoint":10.1,"Light":10,"Noise":40,"AirQuality":90},"TempUnit":"C"}
         this.onSensorTelemetry(topic, payload)
       })
 
-      this.MQTTSubscribe('tele', 'RESULT', (topic, payload) => {
+      this.mqttSubscribeTele('RESULT', (topic, payload) => {
         //tasmota/sc_01/tele/SENSOR = {"Time":"2023-01-08T07:20:34","SonoffSC":{"Temperature":23.0,"Humidity":44.0,"DewPoint":10.1,"Light":10,"Noise":40,"AirQuality":90},"TempUnit":"C"}
         this.onSensorTelemetry(topic, payload)
       })
 
       // Subscribe to explicit sensor-data responses  stat/<device>/STATUS8
-      this.MQTTSubscribe('stat', 'STATUS8', (topic, payload) => {
+      this.mqttSubscribeStat('STATUS8', (topic, payload) => {
         this.onSensorStatus(topic, payload)
       })
     }
 
     onDeviceOnline () {
       // Publish a start command to get the sensors data  cmnd/<device>/STATUS [8]
-      this.MQTTPublish('cmnd', 'STATUS', '8')
+      this.mqttCommand('STATUS', '8')
     }
 
     onNodeInput (msg) {
       // on input we ask a fresh value
-      this.MQTTPublish('cmnd', 'STATUS', '8')
+      this.mqttCommand('STATUS', '8')
     }
 
     sendToOutputs (tasmotaData) {

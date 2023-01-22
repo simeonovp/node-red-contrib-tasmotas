@@ -21,9 +21,8 @@
     </label>
   </div>
   <div class="form-row">
-    <label for="node-input-bridge"><i class="fa fa-tag"></i> Bridge</label>
-    <datalist id="list-avail-bridges"></datalist>
-    <input type="text" id="node-input-bridge" list="list-avail-bridges" autocomplete="on">
+    <label for="node-input-bridge"><i class="fa fa-globe"></i> Bridge</label>
+    <input type="text" id="node-input-bridge">
   </div>
   <hr>
   <div class="form-row">
@@ -44,6 +43,11 @@
 </script>
 
 <script type="text/html" data-help-name="tasmota-rf-device">
+  <p>A node to access RF433 devices (sender and receiver) over a bridge device running the
+    <b>Tasmota</b> firmware.</p>
+  <p>The RF codes will be interpreted and used by names.</p>
+  <p>Possible use cases are simulate remote control devices to control some target devices 
+    or receive events from sensors (motion, door, butons, etc.) or remote controls </p>
 </script>
 
 <script type="text/javascript">
@@ -55,10 +59,10 @@
       name: { value: '', required: true },
       group: { value: '' },
       codes: { value: '' },
-      bridge: { value: '' },
+      bridge: { type: 'tasmota-device' },
       canReceive: { value: false }
     },
-    icon: 'tasmota-sensor.svg',
+    icon: 'tasmota-rf-device.svg',
     paletteLabel: 'RF Device',
     inputs: 1,
     outputs: 1,
@@ -113,23 +117,6 @@
         fillCodes(codes)
       }
       
-      const updateBridges = () => {
-        $('#list-avail-bridges').html('')
-        const rlist = []
-        let bridge
-        if (rf433Db) {
-          const group = self.group || 'default'
-          const device = rf433Db[group]?.find(dbDevice => (dbDevice.name === self.name))
-          if (device?.timimgs) {
-            for (let dbBridge in device.timimgs) {
-              rlist.push(`<option value='${dbBridge}'></option>`)
-              if (self.bridge == dbBridge) bridge = dbBridge
-            }
-          }
-        }
-        $('#list-avail-bridges').append(rlist.join(''))
-      }
-
       const updateDevices = () => {
         $('#list-avail-devices').html('')
         const rlist = []
@@ -144,7 +131,6 @@
           }
           $('#list-avail-devices').append(rlist.join(''))
           $('#node-input-name').val(self.group && (device?.name || '') || self.name)
-          updateBridges()
           updateCodes()
         }
       }
@@ -174,7 +160,6 @@
         const val = $('#node-input-name').val()
         if (self.name !== val) {
           self.name = val
-          updateBridges()
           updateCodes()
         }
       })
@@ -187,13 +172,8 @@
         }
       })
 
-      $('#node-input-bridge').change(() => {
-        self.bridge = $('#node-input-bridge').val()
-      })
-    
       updateGroups()
       updateDevices()
-      updateBridges()
       if (this.codes) fillCodes(JSON.parse(this.codes))
     },
     oneditsave: function() {

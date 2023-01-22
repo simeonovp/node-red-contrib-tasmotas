@@ -11,7 +11,7 @@ module.exports = function (RED) {
       super(config, RED, BUTTON_DEFAULTS)
 
       // Subscribes to stat info for all the buttons  stat/<device>/+
-      this.MQTTSubscribe('stat', '+', (topic, payload) => {
+      this.mqttSubscribeStat('+', (topic, payload) => {
         this.onStat(topic, payload)
       })
     }

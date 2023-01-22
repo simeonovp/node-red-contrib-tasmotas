@@ -1,7 +1,7 @@
 {
   "name": "node-red-contrib-tasmotas",
   "description": "Use and control Tasmota devices in NodeRed",
-  "version": "1.0.1-beta.3",
+  "version": "1.0.1-beta.4",
   "license": "MIT",
   "author": "Peter Simeonov",
   "keywords": [
@@ -36,6 +36,7 @@
       "Tasmota Button": "nodes/tasmota_button.js",
       "Tasmota Generic": "nodes/tasmota_generic.js",
       "Tasmota RF Device": "nodes/tasmota_rf_device.js",
+      "Tasmota RF Bridge": "nodes/tasmota_rf_bridge.js",
       "Tasmota Config": "nodes/tasmota_config.js"
     }
   },

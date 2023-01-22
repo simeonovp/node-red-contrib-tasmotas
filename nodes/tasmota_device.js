@@ -2,10 +2,10 @@ const { emit } = require('process')
 const path = require('path')
 const fs = require('fs')
 const request = require('request')
-const spawn = require("child_process").spawn;
+const spawn = require("child_process").spawn
 
-const socketio = require('socket.io');
-const events = require('events');
+const socketio = require('socket.io')
+const events = require('events')
 
 module.exports = function (RED) {
   'use strict'
@@ -48,7 +48,7 @@ module.exports = function (RED) {
   }
 
   function parseSeconds(val) {
-    return (val > 110) ? (val - 100) : parseInt(val / 10);
+    return (val > 110) ? (val - 100) : parseInt(val / 10)
   }
 
   class Power {
@@ -63,13 +63,13 @@ module.exports = function (RED) {
       this.debTimer
       this.supportPulseTime = false
 
-      device.MQTTSubscribe(device, 'stat', 'POWER' + this.channel, (topic, mqttPayloadBuf) => this.onPower(topic, mqttPayloadBuf))
-      if (this.channel === 1) device.MQTTSubscribe(device, 'stat', 'POWER', (topic, mqttPayloadBuf) => this.onPower(topic, mqttPayloadBuf))
+      device.mqttSubscribeStat(device, 'POWER' + this.channel, (topic, mqttPayloadBuf) => this.onPower(topic, mqttPayloadBuf))
+      if (this.channel === 1) device.mqttSubscribeStat(device, 'POWER', (topic, mqttPayloadBuf) => this.onPower(topic, mqttPayloadBuf))
 
-      device.MQTTSubscribe(device, 'cmnd', 'PulseTime' + this.channel, (topic, mqttPayloadBuf) => this.onPulseTime(topic, mqttPayloadBuf))
-      if (this.channel === 1) device.MQTTSubscribe(device, 'cmnd', 'PulseTime', (topic, mqttPayloadBuf) => this.onPulseTime(topic, mqttPayloadBuf))
+      device.mqttSubscribeCmnd(device, 'PulseTime' + this.channel, (topic, mqttPayloadBuf) => this.onPulseTime(topic, mqttPayloadBuf))
+      if (this.channel === 1) device.mqttSubscribeCmnd(device, 'PulseTime', (topic, mqttPayloadBuf) => this.onPulseTime(topic, mqttPayloadBuf))
 
-      device.MQTTSubscribe(device, 'stat', 'RESULT', (topic, mqttPayloadBuf) => {
+      device.mqttSubscribeStat(device, 'RESULT', (topic, mqttPayloadBuf) => {
         const mqttPayload = mqttPayloadBuf.toString()
         const result = JSON.parse(mqttPayload)
         if (!result) return
@@ -173,9 +173,9 @@ module.exports = function (RED) {
     }
 
     startTimer() {
-      if (!this.supportPulseTime || !this.device.polling || (this.timeout === 0)) return;
+      if (!this.supportPulseTime || !this.device.polling || (this.timeout === 0)) return
       if (this.timer) this.clearInterval(this.timer)
-      this.timer = setInterval(()=>{ this.requestTimer() }, this.device.polling * 1000);
+      this.timer = setInterval(()=>{ this.requestTimer() }, this.device.polling * 1000)
       this.requestTimer()
     }
 
@@ -206,9 +206,9 @@ module.exports = function (RED) {
       device.swiches[idx2] = this.switch1
 
       //tasmota/t1_02/tele/SENSOR = {"Time":"2022-12-26T09:07:46","Shutter1":{"Position":100,"Direction":0,"Target":100}}
-      device.MQTTSubscribe(device, 'tele', 'SENSOR', this.onMqttState.bind(this))
+      device.mqttSubscribeTele(device, 'SENSOR', this.onMqttState.bind(this))
       //tasmota/t1_02/stat/RESULT = {"Shutter1":{"Position":98,"Direction":-1,"Target":-151}}
-      device.MQTTSubscribe(device, 'stat', 'RESULT', this.onMqttState.bind(this))
+      device.mqttSubscribeStat(device, 'RESULT', this.onMqttState.bind(this))
       if (device.isOnline) this.requestPosition()
     }
 
@@ -350,7 +350,7 @@ module.exports = function (RED) {
             if (bssid && (bssid !== this.bssid)) {
               this.bssid = bssid
               const ap = this.manager.findAP(bssid)?.host
-              // RED.nodes.eachNode(n => { if ((n.type === 'tasmota-ap') && (n.mac.toUpperCase() === bssid)) ap = n.name; });
+              // RED.nodes.eachNode(n => { if ((n.type === 'tasmota-ap') && (n.mac.toUpperCase() === bssid)) ap = n.name })
               if (ap && (ap !== this.ap)) {
                 this.ap = ap
                 this.emit('mqtt', 'DeviceOnline')
@@ -367,7 +367,7 @@ module.exports = function (RED) {
       this.isOnline = false
 
       // Subscribe to device availability changes  tele/<device>/LWT
-      this.MQTTSubscribe(this, 'tele', 'LWT', (topic, payload) => {
+      this.mqttSubscribeTele(this, 'LWT', (topic, payload) => {
         this.isOnline = (payload.toString().startsWith('Online'))
         if (this.isOnline) {
           this.onDeviceOnline()
@@ -449,11 +449,11 @@ module.exports = function (RED) {
       if (this.subGroups.stat && topic.startsWith(this.subGroups.stat.topic)) {
         const command = topic.substr(this.subGroups.stat.topic.length)
         if (command.startsWith('STATUS')) this._onMqttStatus(command, payload)
-        this._fireMqttMessage(topic, payload, packet, command, this.subGroups.stat.subscriptions);
+        this._fireMqttMessage(topic, payload, packet, command, this.subGroups.stat.subscriptions)
       }
       else if (this.subGroups.cmnd && topic.startsWith(this.subGroups.cmnd.topic)) {
         const command = topic.substr(this.subGroups.cmnd.topic.length)
-        this._fireMqttMessage(topic, payload, packet, command, this.subGroups.cmnd.subscriptions);
+        this._fireMqttMessage(topic, payload, packet, command, this.subGroups.cmnd.subscriptions)
       }
       else if (this.subGroups.tele && topic.startsWith(this.subGroups.tele.topic)) {
         const command = topic.substr(this.subGroups.tele.topic.length)
@@ -466,12 +466,12 @@ module.exports = function (RED) {
           }
         }
 
-        this._fireMqttMessage(topic, payload, packet, command, this.subGroups.tele.subscriptions);
+        this._fireMqttMessage(topic, payload, packet, command, this.subGroups.tele.subscriptions)
       }
       else {
         //regiter tele subGroup on demand
-        if (!this.subGroups.cmnd && topic.includes(this.config.cmndPrefix)) return this.MQTTSubscribe(this, 'cmnd', 'STATUS')
-        if (!this.subGroups.tele && topic.includes(this.config.telePrefix)) return this.MQTTSubscribe(this, 'tele')
+        if (topic.includes(this.config.telePrefix) || topic.includes(this.config.cmndPrefix)
+          || topic.includes('STATUS') || topic.includes('RESULT')) return
         this.warn(`_onMqttMessage topic:${topic}, subGroups:${JSON.stringify(this.subGroups)}`)
       }
     }
@@ -517,10 +517,10 @@ module.exports = function (RED) {
     }
 
     mqttCommand(command, payload) {
-      this.MQTTPublish('cmnd', command, payload)
+      this._MQTTPublish('cmnd', command, payload)
     }
 
-    MQTTPublish(prefix, command, payload) {
+    _MQTTPublish(prefix, command, payload) {
       const fullTopic = this.buildFullTopic(prefix, command)
       const options = {
         qos: this.config.qos,
@@ -529,23 +529,21 @@ module.exports = function (RED) {
       this.brokerNode.publish(fullTopic, payload, options)
     }
 
-    MQTTSubscribe(tasmotaNode, prefix, command, callback) {
-      this.subGroups = this.subGroups || {}
+    mqttSubscribeCmnd(tasmotaNode, command, callback) {
+      this._MQTTSubscribe(tasmotaNode, 'cmnd', command, callback)
+    }
 
-      switch (prefix) {
-        case 'cmnd':
-        case 'stat':
-        case 'tele':
-          break
-        default:
-          this.warn(`MQTTSubscribe (!unknown prefix):${prefix}, type:${tasmotaNode.type}, node:${tasmotaNode.config?.name}, nodeId:${tasmotaNode.id}`)
-          if (prefix) {
-            const topic = this.buildFullTopic(prefix, command)
-            this.brokerNode.subscribe(tasmotaNode, topic, this.config.qos, callback)
-          }
-          return
-      }
-      
+    mqttSubscribeStat(tasmotaNode, command, callback) {
+      this._MQTTSubscribe(tasmotaNode, 'stat', command, callback)
+    }
+
+    mqttSubscribeTele(tasmotaNode, command, callback) {
+      this._MQTTSubscribe(tasmotaNode, 'tele', command, callback)
+    }
+
+    _MQTTSubscribe(tasmotaNode, prefix, command, callback) {
+      this.subGroups = this.subGroups || {}
+     
       const topic = this.buildFullTopic(prefix, '')
       this.subGroups[prefix] = this.subGroups[prefix] || { topic, subscriptions: {} }
       if (!command || !callback) return
