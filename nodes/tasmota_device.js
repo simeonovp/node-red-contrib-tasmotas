@@ -319,14 +319,18 @@ module.exports = function (RED) {
     async downloadConfig(force = false) {
       //.node-red\projects\node-red-contrib-tasmotas\resources\<project>\configs
       if (!this.manager || !this.config.ip) return
-      this.deviceConfig = await this.manager.downloadConfig(this.config.ip, force)
-      if (!this.deviceConfig) return
-      if (this.deviceConfig.mqtt_host !== this.brokerNode?.config.broker) {
-        this.warn(`Force download device config due to different MQTT broker (${this.deviceConfig.mqtt_host} != ${this.brokerNode?.config.broker})`)
-        this.deviceConfig = await this.manager.downloadConfig(this.config.ip, true)
+      try {
+        this.deviceConfig = await this.manager.downloadConfig(this.config.ip, force)
         if (!this.deviceConfig) return
+        if (this.deviceConfig.mqtt_host !== this.brokerNode?.config.broker) {
+          this.warn(`Force download device config due to different MQTT broker (${this.deviceConfig.mqtt_host} != ${this.brokerNode?.config.broker})`)
+          this.deviceConfig = await this.manager.downloadConfig(this.config.ip, true)
+          if (!this.deviceConfig) return
+        }
       }
-
+      catch(err) {
+        this.error(err)
+      }
       this.mqttCommand('STATUS', '11')
     }
 

@@ -142,6 +142,7 @@ module.exports = function (RED) {
       if (!fs.existsSync(this.confdir)) fs.mkdirSync(this.confdir, { recursive: true });
 
       this.devices = {}
+      this.hosts = {}
 
       this.mqttMapPath = path.resolve(path.join(this.confdir, '..', 'mqtt_map.json'))
       this.mqttMap
@@ -312,8 +313,8 @@ module.exports = function (RED) {
           })
         }
   
-        if (this.devices[hostname] !== ip) {
-          this.hosts[hostname] = ip
+        if (this.devices[config.hostname] !== ip) {
+          this.hosts[config.hostname] = ip
         }
         const sorted = Object.keys(this.mqttMap).sort().reduce((acc, key) => ({...acc, [key]: this.mqttMap[key]}), {})
         this.mqttMap = sorted

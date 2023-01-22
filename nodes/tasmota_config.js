@@ -50,27 +50,32 @@ module.exports = function (RED) {
     }
 
     async onInput(msg, send, done) {
-      switch (msg.action) {
-      case 'httpCommand':
-        if (!msg.ip && !msg.host)  return done('IP address or host must be selected')
-        if (!msg.command && !msg.topic) return done('Command not selected')
-        msg.payload = await this.manager.httpCommand(msg.ip || msg.host, msg.command || msg.topic, msg.payload)
-        break
-      case 'downloadConfig':
-        if (!msg.ip && !msg.host) return done('IP address or host must be selected')
-        msg.payload = await this.manager.downloadConfig(msg.ip || msg.host, msg.force)
-        break
-      case 'downloadAllConfigs':
-        await this.manager.downloadConfig(msg.force)
-        break
-      case 'scanNetwork':
-        await this.manager.scanNetwork()
-        break
-      default:
-        this.warn('Unknown action:' + msg.action)
-        return done()
+      try {
+        switch (msg.action) {
+        case 'httpCommand':
+          if (!msg.ip && !msg.host)  return done('IP address or host must be selected')
+          if (!msg.command && !msg.topic) return done('Command not selected')
+          msg.payload = await this.manager.httpCommand(msg.ip || msg.host, msg.command || msg.topic, msg.payload)
+          break
+        case 'downloadConfig':
+          if (!msg.ip && !msg.host) return done('IP address or host must be selected')
+          msg.payload = await this.manager.downloadConfig(msg.ip || msg.host, msg.force)
+          break
+        case 'downloadAllConfigs':
+          await this.manager.downloadAllConfigs(msg.force)
+          break
+        case 'scanNetwork':
+          await this.manager.scanNetwork()
+          break
+        default:
+          this.warn('Unknown action:' + msg.action)
+          return done()
+        }
+        send(msg)
       }
-      send(msg)
+      catch(err) {
+        this.error(err)
+      }
       done()
     }
   }
