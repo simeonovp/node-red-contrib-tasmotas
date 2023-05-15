@@ -6,6 +6,8 @@ module.exports = function (RED) {
     constructor (config) {
       super(config, RED, {})
 
+      const manager = config.manager && RED.nodes.getNode(config.manager)
+
       // register topic in tasmota device
       this.mqttSubscribeTele('RESULT', (topic, payload) => {
         if (this.config.canReceive) {
@@ -18,7 +20,7 @@ module.exports = function (RED) {
 
       this.on('input', (msg, send, done) => {
         const bridge = this.deviceNode?.config.device
-        bridge && msg.timings && msg.payload && manager.sendRfCode(bridge, msg.timings, msg.payload)
+        bridge && msg.timings && msg.payload && manager?.sendRfCode(bridge, msg.timings, msg.payload)
         done()
       })
     }

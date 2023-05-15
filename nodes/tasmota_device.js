@@ -351,7 +351,8 @@ module.exports = function (RED) {
         case 'STATUS5': {
           const data = payload && JSON.parse(payload)
           this.config.ip = data?.StatusNET?.IPAddress || this.config.ip
-          if (this.config.ip) this.downloadConfig()
+          this.config.mac = data?.StatusNET?.Mac || this.config.mac
+          this.downloadConfig()
           break
         }
         case 'STATUS11': {

@@ -226,12 +226,27 @@
       const brokerNodes = {}
       RED.nodes.eachConfig(n => { if (n.type === 'tasmota-mqtt-broker') brokerNodes[n.broker] = n })
 
+      const getDevices = (project) => {
+        const resp = get(`resources/node-red-contrib-tasmotas/${project}/devices.json`)
+        return resp && (resp[0] == '{') && JSON.parse(resp)
+      }
+
+      const updateManager = () => {
+        if (!context.dbSet['devices']) {
+          const manager = $('#node-config-input-manager').val()
+          const project = (manager !== '_ADD_') ? RED.nodes.node(manager).name : ''
+          if (project) context.dbSet['devices'] = getDevices(project)
+        }
+      }
+
       const self = this
       const updateDevice = () => {
         const manager = $('#node-config-input-manager').val()
         const project = (manager !== '_ADD_') ? RED.nodes.node(manager).name : ''
         const resDir = project && ('resources/node-red-contrib-tasmotas/' + project) || ''
         const configDir = resDir && (resDir + '/configs') || ''
+        let ip = this.ip
+        let host = this.host
   
         const device = $('#node-config-input-device').val()
         $('#node-config-input-ip').text(this.ip || '')
@@ -250,8 +265,10 @@
           }
 
           // Tab Advanced
-          if (config.ip_address) $('#node-config-input-ip').text(config.ip_address[0])
-          if (config.ip_address) $('#node-config-input-ip').attr('href', config.ip_address[0] && ('http://' + config.ip_address[0]) || '')
+          ip = config.ip_address[0]
+          host = config.hostname
+          if (config.ip_address) $('#node-config-input-ip').text(ip)
+          if (config.ip_address) $('#node-config-input-ip').attr('href', ip && ('http://' + ip) || '')
           if (config.hostname) $('#node-config-input-host').val(config.hostname)
           if (config.version) $('#node-config-input-version').val(config.version)
           //?? config.ntp_server
@@ -293,6 +310,14 @@
           }
         }
 
+        const devices = context.dbSet['devices']
+        if (devices) {
+          const row = host && findTableRaw(devices, 'devices', 'host', host)
+            || ip && findTableRaw(devices, 'devices', 'ip', ip)
+          const mac = (row?.mac !== '?') && row?.mac || ''
+          $('#node-config-input-mac').val(mac)
+        }
+
         $('#list-avail-devices').html('')
         const rlist = []
         if (device) rlist.push(`<option value='${device}'></option>`)
@@ -316,6 +341,9 @@
         $('#node-config-input-device').attr('autocomplete', 'on')
       }
 
+      $('#node-config-input-manager').on('change', updateManager)
+      if (this.manager) updateManager()
+
       $('#node-config-input-device').on('change', updateDevice)
       if (!this.device) updateDevice()
     }
@@ -326,11 +354,6 @@
     Httpreq.open('GET', url, false)
     Httpreq.send(null)
     return Httpreq.responseText
-  }
-
-  function getDevices(project) {
-    const resp = get(`resources/node-red-contrib-tasmotas/${project}/devices.json`)
-    return resp && (resp[0] == '{') && JSON.parse(resp)
   }
 
   function getTable(data, table) { return data && data[table] }

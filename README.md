@@ -726,6 +726,9 @@ Can be used to access and control one or more devices
 - detailed nodes description
 - provide usage examples
 
+## Disclaimer
+The software is provided as-is under the MIT license. The author cannot be held responsible for any unintended behaviours.
+
 ## Thanks
 If you like our ideas and want to support further development, you can donate here:  
 [![Donate](https://img.shields.io/badge/donate-PayPal-blue.svg)](https://paypal.me/tasmotas)

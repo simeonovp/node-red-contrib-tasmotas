@@ -8,6 +8,16 @@ const spawn = require("child_process").spawn;
 const socketio = require('socket.io');
 const events = require('events');
 
+function JSONparse(json) {
+  try {
+    return JSON.parse(json)
+  }
+  catch(err) {
+    console.error(`Error JSON.parse(${json}):${err}`);
+    //console.warn(err.stack)
+  }
+}
+
 module.exports = function (RED) {
   'use strict'
 
@@ -36,7 +46,7 @@ module.exports = function (RED) {
     load() {
       if (!this.config.path || !fs.existsSync(this.config.path)) return
       const json = fs.readFileSync(this.config.path, 'utf8') || {}
-      this.data = JSON.parse(json)
+      this.data = JSONparse(json)
     }
   
     save(overwrite) {
@@ -140,6 +150,7 @@ module.exports = function (RED) {
 
       this.confdir = path.join(this.resDir, 'configs')
       if (!fs.existsSync(this.confdir)) fs.mkdirSync(this.confdir, { recursive: true });
+      if (!fs.existsSync(this.confdir)) this.error(`Create local cache folder "${this.confdir}" failed`)
 
       this.devices = {}
       this.hosts = {}
@@ -149,14 +160,6 @@ module.exports = function (RED) {
       this.io
       this.ev = new events.EventEmitter()
       this.ev.setMaxListeners(0)
-
-      this.on('input', (msg, send, done) => {
-        switch (msg.topic) {
-          case 'downloadAllConfigs':
-            this.downloadAllConfigs().then(() => done(msg))
-            break
-        }
-      })
 
       this.on('close', (done)=>{
         if (this.rf433DbDirty) this.rf433Db.save(true)
@@ -215,8 +218,13 @@ module.exports = function (RED) {
       if (fs.existsSync(localPath)) return
       this.log('download decode-config.py to ' + localPath)
       const url = 'https://raw.githubusercontent.com/tasmota/decode-config/development/decode-config.py'
-      const data = await this.getRequest(url)
-      fs.createWriteStream(localPath).write(data)
+      try {
+        const data = await this.getRequest(url)
+        fs.createWriteStream(localPath).write(data)
+      }
+      catch {
+        this.error(`Error on downloading decode-config tool from ${url}. Download the tool manualy to ${this.confdir}`)
+      }
     }
 
     _spawnDecodeConfig(params) {
@@ -241,7 +249,7 @@ module.exports = function (RED) {
     }
     
     loadMqttMap() {
-      this.mqttMap = fs.existsSync(this.mqttMapPath) && JSON.parse(fs.readFileSync(this.mqttMapPath, 'utf8')) || {}
+      this.mqttMap = fs.existsSync(this.mqttMapPath) && JSONparse(fs.readFileSync(this.mqttMapPath, 'utf8')) || {}
       let mapDirty = false
 
       //refresh map by existing configs
@@ -249,7 +257,7 @@ module.exports = function (RED) {
         const { ext } = path.parse(file);
         if (ext !== '.json') return
         const filepath = path.join(this.confdir, file)
-        const config = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+        const config = JSONparse(fs.readFileSync(filepath, 'utf8'));
         const ip_address = config?.ip_address
         const mqtt_topic = config?.mqtt_topic
         if (mqtt_topic && ip_address && ip_address[0] && !this.mqttMap[ip_address[0]]) {
@@ -292,7 +300,7 @@ module.exports = function (RED) {
         this.error(err.stack || err);
       }
     
-      const config = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+      const config = JSONparse(fs.readFileSync(filepath, 'utf8'));
       if (!mqtt_topic && config?.mqtt_topic) {
         fs.renameSync(filepath, path.join(this.confdir, config.mqtt_topic + '.json'))
         this.mqttMap[ip] = config.mqtt_topic

@@ -1,5 +1,9 @@
 <script type="text/html" data-template-name="tasmota-rf-bridge">
   <div class="form-row">
+    <label for="node-input-manager"><i class="fa fa-globe"></i> Rf Manager</label>
+    <input type="text" id="node-input-manager">
+  </div>
+  <div class="form-row">
     <label for="node-input-device"><i class="fa fa-dot-circle-o"></i> Device</label>
     <input type="text" id="node-input-device">
   </div>
@@ -41,6 +45,7 @@
     color: '#10AF80',
     defaults: {
       // inherited from tasmota-base
+      manager: { type: 'tasmota-rf-manager' },
       device: { type: 'tasmota-device', required: true },
       name: { value: '' },
       sendDevice: { value: true },
