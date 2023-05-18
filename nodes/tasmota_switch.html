@@ -33,9 +33,10 @@
         <input type="checkbox" id="node-input-sendDevice" style="display:inline-block; width:15px; vertical-align:baseline;">
         Send device name
     </label>
+    <!-- #2--- -->
     <label for="node-input-supportPulseTime" style="width:70%">
         <input type="checkbox" id="node-input-supportPulseTime" style="display:inline-block; width:15px; vertical-align:baseline;">
-        Support PulseTime parameter
+        Support PulseTime parameter [deprecated]
     </label>
     <label for="node-input-supportChangeTime" style="width:70%">
         <input type="checkbox" id="node-input-supportChangeTime" style="display:inline-block; width:15px; vertical-align:baseline;">
@@ -83,7 +84,7 @@
       uidisabler: { value: false },
       // node specific
       idx: { value: '0' },
-      supportPulseTime: { value: false },
+      supportPulseTime: { value: false }, //#2--
       supportChangeTime: { value: false }
     },
     icon: 'tasmota-switch.svg',
@@ -105,6 +106,12 @@
       updateName()
       $('#node-input-device').on('change', updateName)
       $('#node-input-idx').on('change', updateName)
+    },
+    oneditsave: function() {
+      //#2---
+      if (this.supportPulseTime == 'true') {
+        allert('Parameter SupportPulseTime is deprecated. Use PulseTime node instead')
+      }
     }
   })
 </script>

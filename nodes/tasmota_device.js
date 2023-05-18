@@ -140,8 +140,9 @@ module.exports = function (RED) {
       this.send({ topic: 'timeout', timeout: sec })
     }
 
-    send(msg) {
+    send(msg) { //TODO remove and implement inline
       this.device.emit('tasmota-switch' + (this.idx || ''), 'send', msg)
+      this.device.emit('tasmota-pulsetime' + (this.idx || ''), 'send', msg)
     }
     
     setPower(val) {

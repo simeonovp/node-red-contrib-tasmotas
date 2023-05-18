@@ -1,0 +1,78 @@
+<script type="text/html" data-template-name="tasmota-pulsetime">
+  <div class="form-row">
+    <label for="node-input-device"><i class="fa fa-dot-circle-o"></i> Device</label>
+    <input type="text" id="node-input-device">
+  </div>
+  <div class="form-row">
+  <label for="node-input-idx"><i class="fa fa-random"></i> Channel</label>
+  <select id="node-input-idx">
+    <option value="0">1</option>
+    <option value="1">2</option>
+    <option value="2">3</option>
+    <option value="3">4</option>
+    <option value="4">5</option>
+    <option value="5">6</option>
+    <option value="6">7</option>
+    <option value="7">8</option>
+  </select>
+  </div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name">
+  </div>
+  <div class="form-row">
+    <label for="node-input-uidisabler"><i class="fa fa-bar-chart"></i> Dashboard</label>
+    <label for="node-input-uidisabler" style="width:70%">
+      <input type="checkbox" id="node-input-uidisabler" style="display:inline-block; width:22px; vertical-align:baseline;">
+      Send enable/disable message
+    </label>
+  </div>
+  <hr>
+  <div class="form-row">
+    <label for="node-input-sendDevice" style="width:70%">
+      <input type="checkbox" id="node-input-sendDevice" style="display:inline-block; width:15px; vertical-align:baseline;">
+      Send device name
+    </label>
+  </div>
+</script>
+
+<script type="text/html" data-help-name="tasmota-pulsetime">
+  <p>Control the PulseTime of a <b>Switch</b> device running the <b>Tasmota</b> firmware.</p>
+</script>
+
+<script type="text/javascript">
+  RED.nodes.registerType('tasmota-pulsetime', {
+    category: 'tasmota',
+    color: '#10AF80',
+    defaults: {
+      // inherited from tasmota-base
+      device: { type: 'tasmota-device', required: true },
+      name: { value: '' },
+      outputs: { value: 2 },
+      sendDevice: { value: true },
+      uidisabler: { value: false },
+      // node specific
+      idx: { value: '0' },
+    },
+    icon: 'tasmota-switch.svg',
+    paletteLabel: 'PulseTime',
+    inputs: 1,
+    outputs: 2,
+    label: function() {
+      return this.name || (RED.nodes.node(this.device) && (`PulseTime_${RED.nodes.node(this.device).device}_${parseInt(this.idx) + 1}`)) || 'Tasmota PulseTime'
+    },
+    labelStyle: function() {
+      return this.name ? 'node_label_italic' : ''
+    },
+    oneditprepare: function () {
+      if (!this.device) $('#node-input-device').val('_ADD_')
+      if (!this.idx) $('#node-input-idx').val('0')
+      const updateName = () => {
+        $('#node-input-name').attr('placeholder', 'pulsetime_' + $('#node-input-device option:selected').text() + '_' + $('#node-input-idx option:selected').text())
+      }
+      updateName()
+      $('#node-input-device').on('change', updateName)
+      $('#node-input-idx').on('change', updateName)
+    }
+  })
+</script>

@@ -4,7 +4,7 @@ module.exports = function (RED) {
 
   const SWITCH_DEFAULTS = {
     idx: 0,
-    supportPulseTime: false,
+    supportPulseTime: false, //#2--
     supportChangeTime: false
   }
 
@@ -12,7 +12,11 @@ module.exports = function (RED) {
     constructor (config) {
       super(config, RED, SWITCH_DEFAULTS)
       this.switch = this.deviceNode.swiches[this.config.idx]
-      if (this.config.supportPulseTime) this.switch.supportPulseTime = true
+      //#2---
+      if (this.config.supportPulseTime) {
+        this.warn('Parameter SupportPulseTime is deprecated. Use PulseTime node instead')
+        this.switch.supportPulseTime = true
+      }
     }
 
     onNodeInput (msg) {
@@ -20,7 +24,7 @@ module.exports = function (RED) {
 
       let payload = msg.payload
       const topic = (msg.topic || '').toLowerCase()
-      
+      //#2---
       if (topic.startsWith('timeout')) {
         if (!this.config.supportPulseTime) return
         const channel = this.extractChannelNum(topic)
@@ -70,9 +74,11 @@ module.exports = function (RED) {
           // update status icon and label
           if (this.switch.lastValue) this.setNodeStatus('green', 'On')
           else  this.setNodeStatus('grey', 'Off')
+          super.onSend(msg)
           break
+        default:
+          if (this.config.supportPulseTime) super.onSend(msg) //#2--
       }
-      super.onSend(msg)
     }
   }
 

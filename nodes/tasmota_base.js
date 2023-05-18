@@ -112,7 +112,10 @@ class TasmotaBase {
   }
 
   onSend(msg) {
-    if (this.config.sendDevice) msg.device = this.deviceNode.config.device
+    if (Array.isArray(msg)) {
+      if (this.config.sendDevice) msg.forEach(pinMsg => pinMsg && (pinMsg.device = this.deviceNode.config.device))
+    }
+    else if (this.config.sendDevice) msg.device = this.deviceNode.config.device
     this.send(msg)
   }
 
