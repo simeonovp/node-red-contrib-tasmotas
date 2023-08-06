@@ -15,7 +15,6 @@ module.exports = function (RED) {
       //#2---
       if (this.config.supportPulseTime) {
         this.warn('Parameter SupportPulseTime is deprecated. Use PulseTime node instead')
-        this.switch.supportPulseTime = true
       }
     }
 
@@ -25,12 +24,7 @@ module.exports = function (RED) {
       let payload = msg.payload
       const topic = (msg.topic || '').toLowerCase()
       //#2---
-      if (topic.startsWith('timeout')) {
-        if (!this.config.supportPulseTime) return
-        const channel = this.extractChannelNum(topic)
-        this.switch.requestTimer(payload.toString())
-        return
-      }
+      if (topic.startsWith('timeout')) return
 
       if (typeof payload !== 'boolean') {
         // Switch On/Off for booleans and 1/0 (int or str)
@@ -69,15 +63,14 @@ module.exports = function (RED) {
     onSend(msg) {
       msg.payload = this.switch.lastValue
       if (this.config.supportChangeTime) msg.time = this.switch.lastChangeTime.toLocaleString()
-      switch(msg.topic) {
-        case 'switch':
-          // update status icon and label
-          if (this.switch.lastValue) this.setNodeStatus('green', 'On')
-          else  this.setNodeStatus('grey', 'Off')
-          super.onSend(msg)
-          break
-        default:
-          if (this.config.supportPulseTime) super.onSend(msg) //#2--
+      if (msg.topic.startsWith('switch')) {
+        // update status icon and label
+        if (this.switch.lastValue) this.setNodeStatus('green', 'On')
+        else  this.setNodeStatus('grey', 'Off')
+        super.onSend(msg)
+      }
+      else {
+        if (this.config.supportPulseTime) super.onSend(msg) //#2--
       }
     }
   }

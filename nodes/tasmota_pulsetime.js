@@ -10,19 +10,17 @@ module.exports = function (RED) {
     constructor (config) {
       super(config, RED, PULSETIME_DEFAULTS)
       this.switch = this.deviceNode.swiches[this.config.idx]
-      this.switch.supportPulseTime = true
-      this.pulseTime = null
+      if (this.switch) this.switch.supportPulseTime = true
     }
 
     onNodeInput (msg) {
       if (msg.device && (this.deviceNode.config.device === msg.device)) return
 
-      const payload = NaN(payload) ? payload || '' : msg.payload
+      const payload = isNaN(msg.payload) ? msg.payload || '' : msg.payload
       this.switch.requestTimer(payload.toString())
     }
 
     onSend(msg) {
-      this.log('onSend, topic:' + msg.topic)
       switch(msg.topic) {
         case 'timeout':
           msg.payload = msg.timeout

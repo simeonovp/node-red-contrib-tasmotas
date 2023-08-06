@@ -74,23 +74,21 @@ module.exports = function (RED) {
         const result = JSON.parse(mqttPayload)
         if (!result) return
         for (const key in result) {
-          if (!key.startsWith('PulseTime')) return
+          if (!key.startsWith('PulseTime')) continue
           if (extractChannelNum(key) !== this.channel) return
           const PulseTime = result[key]
           if (PulseTime) {
-            if (PulseTime.Set !== null) {
+            if (typeof PulseTime.Set === 'number') {
               const sec = parseSeconds(PulseTime.Set)
               if (this.timeout !== sec) {
                 this.timeout = sec
                 this.send({topic: 'timeout', timeout: sec})
               }
             }
-            if (this.device.polling) {
-              if (PulseTime.Remaining !== null) {
-                const sec = parseSeconds(PulseTime.Remaining)
-                if(sec) this.send({topic: 'countdown', countdown: sec})
-                else if(this.timer) this.stopTimer()
-              }
+            if (typeof PulseTime.Remaining === 'number') {
+              const sec = parseSeconds(PulseTime.Remaining)
+              if(sec) this.send({topic: 'countdown', countdown: sec})
+              else if(this.timer) this.stopTimer()
             }
           }
         }
@@ -127,13 +125,13 @@ module.exports = function (RED) {
       }
 
       this.lastChangeTime = new Date()
-      this.send({ topic: 'switch' })
+      this.send({ topic: 'switch' + this.channel })
     }
 
     onPulseTime(topic, mqttPayloadBuf) {
       const mqttPayload = mqttPayloadBuf.toString()
-      const sec = parseSeconds(parseInt(mqttPayload))
       if (!mqttPayload) return //epmty  payload
+      const sec = parseSeconds(parseInt(mqttPayload))
       if (this.timeout !== sec) {
         this.timeout = sec
       }
@@ -403,7 +401,7 @@ module.exports = function (RED) {
       if (!this.users) this._regsterAtBroker()
       this.users++
 
-      if (tasmotaNode.type === 'tasmota-switch') {
+      if ((tasmotaNode.type === 'tasmota-switch') || (tasmotaNode.type === 'tasmota-pulsetime')) {
         const idx = tasmotaNode.config.idx || 0
         // create power object on demand
         this.swiches[idx] = this.swiches[idx] || new Power(this, idx)
@@ -496,7 +494,8 @@ module.exports = function (RED) {
         for (const ref in subscriptions[command]) {
           if (Object.prototype.hasOwnProperty.call(subscriptions[command], ref)) {
             const callback = subscriptions[command][ref]
-            callback(topic, payload, packet)
+            if (Array.isArray(callback)) callback.forEach(cb => cb(topic, payload, packet))
+            else callback(topic, payload, packet)
           }
         }
       }
@@ -505,7 +504,8 @@ module.exports = function (RED) {
         for (const ref in subscriptions[command]) {
           if (Object.prototype.hasOwnProperty.call(subscriptions[command], ref)) {
             const callback = subscriptions[command][ref]
-            callback(topic, payload, packet)
+            if (Array.isArray(callback)) callback.forEach(cb => cb(topic, payload, packet))
+            else callback(topic, payload, packet)
           }
         }
       }
@@ -565,7 +565,17 @@ module.exports = function (RED) {
     
       let subscriptions = this.subGroups[prefix].subscriptions
       subscriptions[command] = subscriptions[command] || {}
-      subscriptions[command][tasmotaNode.id] = callback
+
+      let callbacks = subscriptions[command][tasmotaNode.id]
+      if (callbacks) {
+        if (!Array.isArray(callbacks)) {
+          callbacks = [callbacks]
+          subscriptions[command][tasmotaNode.id] = callbacks
+        }
+        callbacks.push(callback)
+      }
+      else callbacks = callback
+      subscriptions[command][tasmotaNode.id] = callbacks
     }
   }
 
