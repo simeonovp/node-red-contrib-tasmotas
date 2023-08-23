@@ -234,7 +234,7 @@
       const updateManager = () => {
         if (!context.dbSet['devices']) {
           const manager = $('#node-config-input-manager').val()
-          const project = (manager !== '_ADD_') ? RED.nodes.node(manager).name : ''
+          const project = manager && (manager !== '_ADD_') ? RED.nodes.node(manager).name : ''
           if (project) context.dbSet['devices'] = getDevices(project)
         }
       }
@@ -242,7 +242,7 @@
       const self = this
       const updateDevice = () => {
         const manager = $('#node-config-input-manager').val()
-        const project = (manager !== '_ADD_') ? RED.nodes.node(manager).name : ''
+        const project = manager && (manager !== '_ADD_') ? RED.nodes.node(manager).name : ''
         const resDir = project && ('resources/node-red-contrib-tasmotas/' + project) || ''
         const configDir = resDir && (resDir + '/configs') || ''
         let ip = this.ip
