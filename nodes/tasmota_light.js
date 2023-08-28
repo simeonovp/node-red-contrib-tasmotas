@@ -3,7 +3,7 @@ module.exports = function (RED) {
   const TasmotaBase = require('./tasmota_base.js')
 
   const LIGHT_DEFAULTS = {
-    dualLights: true,
+    dualLights: true, // SetOption37 >= 128
     havedimmer: true,
     havetemp: false,
     havecolors: false,
@@ -105,7 +105,11 @@ module.exports = function (RED) {
       // MODE 2: topic mode (with simple-typed payload)
       const processCmd = (cmd) => {
         switch (cmd) {
-          case 'on': case 'state': case 'power': case 'power1':
+          case 'on': case 'state': case 'power':
+            data.on1 = msg.payload
+            data.on2 = msg.payload
+            break
+          case 'power1':
             data.on1 = msg.payload
             break
           case 'power2':
@@ -162,18 +166,15 @@ module.exports = function (RED) {
 
       // on: true/false, 1/0, on/off, toggle (not case sensitive)
       const sendPower = (on, idx) => {
-        console.log(`-- sendPower(${on}, ${idx})`) //--
         switch (on.toString().toLowerCase()) {
           case '1':
           case 'on':
           case 'true':
-            console.log(`-- mqttCommand(${'POWER' + idx}, ${onValue})`)
             this.mqttCommand('POWER' + idx, onValue)
             break
           case '0':
           case 'off':
           case 'false':
-            console.log(`-- mqttCommand(${'POWER' + idx}, ${offValue})`)
             this.mqttCommand('POWER' + idx, offValue)
             break
           case 'toggle':
@@ -275,26 +276,6 @@ module.exports = function (RED) {
     }
 
     onStat (mqttTopic, mqttPayloadBuf) {
-      // const payloadSingle = {
-      //   "POWER":"OFF",
-      //   "Dimmer":0,
-      //   "Color":"0,0,0,0",
-      //   "HSBColor":"224,100,0",
-      //   "White":0,
-      //   "Channel":[0,0,0,0]
-      // }
-      // const payloadDual = { 
-      //   "POWER1": "ON",
-      //   "Dimmer1": 50,
-      //   "POWER2": "ON",
-      //   "Dimmer2": 100,
-      //   "Color": "014080FF00",
-      //   "HSBColor": "210,99,50",
-      //   "White": 100,
-      //   "CT": 153,
-      //   "Channel": [1, 25, 50, 100, 0] 
-      // }
-
       let data
       try {
         data = JSON.parse(mqttPayloadBuf.toString())

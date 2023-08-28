@@ -3,18 +3,17 @@ const path = require('path')
 const fs = require('fs')
 const fsx = require('fs-extra')
 const request = require('request')
-const spawn = require("child_process").spawn;
+const spawn = require("child_process").spawn
 
-const socketio = require('socket.io');
-const events = require('events');
+const socketio = require('socket.io')
+const events = require('events')
 
 function JSONparse(json) {
   try {
     return JSON.parse(json)
   }
   catch(err) {
-    console.error(`Error JSON.parse(${json}):${err}`);
-    //console.warn(err.stack)
+    console.error(`Error JSON.parse(${json}):${err}`)
   }
 }
 
@@ -50,7 +49,7 @@ module.exports = function (RED) {
     }
   
     save(overwrite) {
-      if (!this.config.path) return;
+      if (!this.config.path) return
       if (overwrite || !fs.existsSync(this.config.path)) {
         const json = JSON.stringify(this.data, null, 2)
         fs.createWriteStream(this.config.path).write(json)
@@ -69,7 +68,7 @@ module.exports = function (RED) {
             console.warn('Failed to get ' + url)
             reject (err ? err : resp.statusCode)
             this.downloadPending = false
-            return;
+            return
           }
           
           const json = JSON.stringify(data, null, 2)
@@ -79,25 +78,25 @@ module.exports = function (RED) {
           if (skipIfSame && length && json.length && (length === json.length) && (hash === this.hashCode(json))) {
             resolve()
             this.downloadPending = false
-            return;
+            return
           }
 
           this.data = data
           this.updateManifest(url, json)
           resolve(json)
           this.downloadPending = false
-        });
-      });
+        })
+      })
     }
     
     hashCode(string) {
       let hash = 0
       for (let i = 0; i < string.length; i++) {
         let code = string.charCodeAt(i)
-        hash = ((hash << 5) - hash) + code;
-        hash = hash & hash; // Convert to 32bit integer
+        hash = ((hash << 5) - hash) + code
+        hash = hash & hash // Convert to 32bit integer
       }
-      return hash;
+      return hash
     }
 
 
@@ -126,30 +125,30 @@ module.exports = function (RED) {
       RED.nodes.createNode(this, config)
 
       this.config = config
-      this.status = 'unconfigured';
+      this.status = 'unconfigured'
 
       this.resDir = path.resolve(path.join(__dirname, '../resources', config.name))
-      this.manifestDb = new DbBase({ path: path.join(this.resDir, 'manifest.json') });
+      this.manifestDb = new DbBase({ path: path.join(this.resDir, 'manifest.json') })
 
       this.devicesDb = new DbBase({ 
         path: path.join(this.resDir, 'devices.json'), 
         url: this.config.dbUri && (this.config.dbUri + 'devices.json') 
-      }, this.manifestDb);
+      }, this.manifestDb)
       this.grp = 0
 
       this.networkDb = new DbBase({ 
         path: path.join(this.resDir, 'network.json'), 
         url: this.config.dbUri && (this.config.dbUri + 'network.json') 
-      }, this.manifestDb);
+      }, this.manifestDb)
 
       this.rf433Db = new DbBase({ 
         path: path.join(this.resDir, 'rf433codes.json'), 
         url: this.config.dbUri && (this.config.dbUri + 'rf433codes.json') 
-      }, this.manifestDb);
+      }, this.manifestDb)
       this.rf433DbDirty = false
 
       this.confdir = path.join(this.resDir, 'configs')
-      if (!fs.existsSync(this.confdir)) fs.mkdirSync(this.confdir, { recursive: true });
+      if (!fs.existsSync(this.confdir)) fs.mkdirSync(this.confdir, { recursive: true })
       if (!fs.existsSync(this.confdir)) this.error(`Create local cache folder "${this.confdir}" failed`)
 
       this.devices = {}
@@ -180,10 +179,10 @@ module.exports = function (RED) {
       if (!this.config.dbUri) return
       if (!overwrite && (this.status === 'configured')) return
       if (this.status === 'initializing') return
-      this._setStatus('initializing');
+      this._setStatus('initializing')
       try {
         if (this.devicesDb && await this.devicesDb.download(true)) this.devicesDb.save(overwrite)
-        if (this.networkDb && await this.networkDb.download(true)) this.networkDb.save(overwrite);
+        if (this.networkDb && await this.networkDb.download(true)) this.networkDb.save(overwrite)
         const groups = this.devicesDb && this.devicesDb.getTable('groups') || [{ idx: 0, name: '?' }]
         const group = groups.find(row => (row['name'] === this.name))
         if (group) {
@@ -198,18 +197,18 @@ module.exports = function (RED) {
 
         this._downloadDecodeConfig()
 
-        this._setStatus('configured');
+        this._setStatus('configured')
       }
       catch(err) {
-        this.status = 'unconfigured';
-        this.error(err.stack || err);
+        this.status = 'unconfigured'
+        this.error(err.stack || err)
       }
     }
 
     _setStatus(status) {
-      this.status = status;
+      this.status = status
       // Pass the new status to all listeners
-      //?? this.emit('devdb_status', status);
+      //?? this.emit('devdb_status', status)
     }
 
     async _downloadDecodeConfig() {
@@ -239,9 +238,9 @@ module.exports = function (RED) {
     // begin commands
     backupResources(bakDir) {
       bakDir = path.resolve(path.join(this.resDir, '..', bakDir))
-      const date = new Date().toISOString().slice(0, 10);
+      const date = new Date().toISOString().slice(0, 10)
       const bakPath = path.join(bakDir, `${this.config.name}_${date.slice(2, 4)}${date.slice(5, 7)}${date.slice(8, 10)}`)
-      if (!fs.existsSync(bakDir)) fs.mkdirSync(bakDir, { recursive: true });
+      if (!fs.existsSync(bakDir)) fs.mkdirSync(bakDir, { recursive: true })
       try {
         fsx.copySync(this.resDir, bakPath)
       } 
@@ -254,18 +253,18 @@ module.exports = function (RED) {
 
       //refresh map by existing configs
       fs.readdirSync(this.confdir).forEach(file => {
-        const { ext } = path.parse(file);
+        const { ext } = path.parse(file)
         if (ext !== '.json') return
         const filepath = path.join(this.confdir, file)
-        const config = JSONparse(fs.readFileSync(filepath, 'utf8'));
+        const config = JSONparse(fs.readFileSync(filepath, 'utf8'))
         const ip_address = config?.ip_address
         const mqtt_topic = config?.mqtt_topic
         if (mqtt_topic && ip_address && ip_address[0] && !this.mqttMap[ip_address[0]]) {
           this.mqttMap[ip_address[0]] = mqtt_topic
           mapDirty = true
         }
-      }); 
-      if (mapDirty) fs.createWriteStream(this.mqttMapPath).write(JSON.stringify(this.mqttMap, null, 2));
+      }) 
+      if (mapDirty) fs.createWriteStream(this.mqttMapPath).write(JSON.stringify(this.mqttMap, null, 2))
       return this.mqttMap
     }
 
@@ -292,15 +291,15 @@ module.exports = function (RED) {
             '-d', ip,
             '-o', filepath,
             '--json-indent', 2
-          ]);
+          ])
           if (err) return
         }
       }
       catch(err) {
-        this.error(err.stack || err);
+        this.error(err.stack || err)
       }
     
-      const config = JSONparse(fs.readFileSync(filepath, 'utf8'));
+      const config = JSONparse(fs.readFileSync(filepath, 'utf8'))
       if (!mqtt_topic && config?.mqtt_topic) {
         fs.renameSync(filepath, path.join(this.confdir, config.mqtt_topic + '.json'))
         this.mqttMap[ip] = config.mqtt_topic
@@ -326,7 +325,7 @@ module.exports = function (RED) {
         }
         const sorted = Object.keys(this.mqttMap).sort().reduce((acc, key) => ({...acc, [key]: this.mqttMap[key]}), {})
         this.mqttMap = sorted
-        fs.createWriteStream(this.mqttMapPath).write(JSON.stringify(this.mqttMap, null, 2));
+        fs.createWriteStream(this.mqttMapPath).write(JSON.stringify(this.mqttMap, null, 2))
       }
       return config
     }
@@ -345,7 +344,7 @@ module.exports = function (RED) {
               await this.downloadConfig(device.ip)
             }
             catch(err) {
-              this.error(err.stack || err);
+              this.error(err.stack || err)
             }
           }
         }
@@ -485,11 +484,11 @@ module.exports = function (RED) {
             console.warn('Failed to get ' + url)
             reject (err ? err : resp.statusCode)
             this.downloadPending = false
-            return;
+            return
           }
           resolve(data)
-        });
-      });
+        })
+      })
     }
 
     mqttCommand(device, command, payload) {
