@@ -44,7 +44,8 @@
   "dependencies": {
     "child_process": "^1.0.2",
     "mqtt": "4.2.6",
-    "request": "^2.88.2"
+    "request": "^2.88.2",
+    "fs-extra": "10.0.0"
   },
   "devDependencies": {
     "standard": "*"

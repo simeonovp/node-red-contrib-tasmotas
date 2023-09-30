@@ -8,19 +8,30 @@ module.exports = function (RED) {
 
       const manager = config.manager && RED.nodes.getNode(config.manager)
 
-      // register topic in tasmota device
-      this.mqttSubscribeTele('RESULT', (topic, payload) => {
-        if (this.config.canReceive) {
+      const onRfReceive = (topic, payload) => {
+        const canReceive = (this.config.canReceive !== undefined) ? this.config.canReceive : true
+        if (canReceive) {
           const json = payload.toString()
           const data = (json.charAt(0) === '{') && JSON.parse(json)
-          msg.payload = data?.RfReceived
-          msg.payload && this.onSend(msg)
+          const msg = {}
+          msg.payload = data
+          msg.data = data?.RfReceived?.Data
+          msg.timestamp = Date.now()
+          msg.data && super.onSend(msg)
         }
-      })
+      }
+
+      // register topic in tasmota device
+      this.mqttSubscribeTele('RESULT', onRfReceive)
 
       this.on('input', (msg, send, done) => {
         const bridge = this.deviceNode?.config.device
         bridge && msg.timings && msg.payload && manager?.sendRfCode(bridge, msg.timings, msg.payload)
+        done()
+      })
+
+      this.on('close', (done) => {
+        //this.mqttUnubscribeTele('RESULT', onRfReceive)
         done()
       })
     }
