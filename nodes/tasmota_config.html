@@ -88,7 +88,7 @@
           ilist.push(`
             <tr>
               <td><input type="image" src="${shapshotUri}" name="${dev.name}" width="48" height="48" alt="${dev.name}"/></td>
-              <td><input type="text" value="${dev.host}" style="width:100%" readonly></td>
+              <td><a href="http://${dev.ip}" target="_blank">${dev.host}</a></td>
               <td><input type="text" id="node-name-${dev.idx}" value="${node.name}" style="width:100%"${node.device && ' readonly' || ''}></td>
               <td>
                 <button type="button" id="add-node-${dev.idx}" ${node.device && 'hidden' || 'class="red-ui-button"'}>

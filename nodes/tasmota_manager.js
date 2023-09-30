@@ -240,7 +240,6 @@ module.exports = function (RED) {
     async downloadIcons(all, force) {
       if (!this.devicesDb || !this.config.dbUri) return
       const iconsDir = path.join(this.resDir, 'icons')
-      this.log('-- iconsDir:' + iconsDir)
       if (fs.existsSync(this.iconsdir)) if (!force) return
       else fs.mkdirSync(this.iconsdir, { recursive: true })
       const devices = this.devicesDb.data?.devices
@@ -249,7 +248,6 @@ module.exports = function (RED) {
       if (!hws) return this.error('No hardware table in DB')
 
       const urlDir = new URL('../img/', this.config.dbUri).href
-      this.log('-- uriDir:' + urlDir)
       // const download = (uri, filename, callback) => {
       //   request.head(uri, (err, res, body) => {
       //     request(uri).pipe(fs.createWriteStream(filename)).on('close', callback)
@@ -279,7 +277,6 @@ module.exports = function (RED) {
           }
         }
       }
-      this.log(`-- found (${hwList.length}) icons`)
       for (const hw of hwList) {
         const img = hw?.img && (hw.img !== '?') && hw.img
         if (!img) continue
