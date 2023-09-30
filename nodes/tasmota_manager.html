@@ -12,6 +12,12 @@
     <label for="node-config-input-network"><i class="fa fa-tag"></i> Network</label>
     <input type="text" id="node-config-input-network" placeholder="192.168.1.0/24">
   </div>
+  <div class="form-row">
+    <label for="tasmota-upgrade-devices"><i class="fa fa-tag"></i> Upgrade devices</label>
+    <button type="button" id="tasmota-upgrade-devices" class="red-ui-button">
+      <i class="fa fa-refresh"></i>
+    </button>
+  </div>
 </script>
 
 <script type="text/html" data-help-name="tasmota-manager">
@@ -29,9 +35,67 @@
       network: { value: '' }
     },
     label: function() {
+      // use label callback to perform init
+      if (!this.init) {
+        this.resDir = 'resources/node-red-contrib-tasmotas/' + (this.name || 'default')
+        this.configDir = this.resDir + '/configs'
+        this.getMqttMap = (() => {
+          if (this._mqttMap) return this._mqttMap
+          this._mqttMap = {}
+          fetch(this.resDir + '/mqtt_map.json').then(r=>r.json().then(d=>this._mqttMap=d))
+        }).bind(this)
+        this.getDevices = (() => {
+          if (this._devices) return this._devices
+          this._devices = {}
+          fetch(this.resDir + '/devices.json').then(r=>r.json().then(d=>this._devices=d))
+        }).bind(this)
+        this.addDevice =  (obj) => {
+          const type = 'tasmota-device'
+          const _def = RED.nodes.getType(type)
+          if (!_def) return console.error(`Config node type '${type}' not registered`)
+          const id = RED.nodes.id()
+          let y = { id, _def, type, z: '', users: [] }
+          for (let o in y, _def.defaults) {
+            _def.defaults[o].value && (y[o] = JSON.parse(JSON.stringify(_def.defaults[o].value)))
+          }
+          const e = obj ? {...y, ...obj} : y
+          RED.nodes.add(e)
+        }
+        this.getDevices()
+        this.getMqttMap()
+        this.init = true
+      }
       return this.name || 'Manager'
     },
     oneditprepare: function () {
+      const upgradeDevice = (dev, _def) => {
+        const y = { id: dev.id, _def, type: dev.type, z: dev.z || '', users: dev.users || [] }
+        for (let o in y, _def.defaults) {
+          if (dev[o] !== undefined) y[o] = dev[o]
+          else if (_def.defaults[o].value !== undefined) y[o] = JSON.parse(JSON.stringify(_def.defaults[o].value))
+          else if (_def.defaults[o].type !== undefined) y[o] = ''
+          else console.error(`Property ${o} of ${dev.type} has no default value`)
+        }
+        RED.nodes.remove(dev.id)
+        RED.nodes.add(y)
+      }
+
+      $('#tasmota-upgrade-devices').click(() => {
+        //console.log('-- RED.nodes keys' + Object.keys(RED.nodes))
+        //> keysinit,registry,setNodeList,getNodeSet,addNodeSet,removeNodeSet,enableNodeSet,disableNodeSet,setIconSets,getIconSets,registerType,getType,getNodeHelp,convertNode,add,remove,clear,detachNodes,moveNodesForwards,moveNodesBackwards,moveNodesToFront,moveNodesToBack,getNodeOrder,setNodeOrder,moveNodeToTab,addLink,removeLink,getNodeLinks,addWorkspace,removeWorkspace,getWorkspaceOrder,setWorkspaceOrder,workspace,addSubflow,removeSubflow,subflow,subflowContains,addGroup,removeGroup,group,groups,addJunction,removeJunction,junction,junctions,eachNode,eachLink,eachConfig,eachSubflow,eachWorkspace,node,version,originalFlow,filterNodes,filterLinks,import,identifyImportConflicts,getAllFlowNodes,getAllUpstreamNodes,getAllDownstreamNodes,getNodeIslands,createExportableNodeSet,createCompleteNodeSet,updateConfigNodeUsers,id,dirty,fontAwesome
+        const type = 'tasmota-device'
+        const _def = RED.nodes.getType(type)
+        if (!_def) return console.error(`Config node type '${type}' not registered`)
+        RED.nodes.eachConfig(n => { 
+          if (n.type !== 'tasmota-device') return
+          for (const o in _def.defaults) { // look for missing deaults element
+            if (n[o] === undefined) {
+              upgradeDevice(n, _def)
+              break
+            }
+          }
+        })
+      })
     }
   })
 </script>

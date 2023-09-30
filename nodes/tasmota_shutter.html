@@ -23,6 +23,10 @@
       Send enable/disable message
     </label>
   </div>
+  <div class="form-row">
+    <label for="device-gui"><i class="fa fa-tag"></i> DeviceConfig</label>
+    <a id="device-gui" href="" target="_blank"></a>
+  </div>
   <hr>
   <div class="form-row">
     <label for="node-input-sendDevice" style="width:70%">
@@ -108,8 +112,14 @@
       const updateName = () => {
         $('#node-input-name').attr('placeholder', $('#node-input-device option:selected').text() + '_' + $('#node-input-idx option:selected').text())
       }
-      updateName()
-      $('#node-input-device').on('change', updateName)
+      const updateDevice = () => {
+        updateName()
+        const device = this.device && RED.nodes.node(this.device)
+        $('#device-gui').text(device?.ip || '')
+        $('#device-gui').attr('href', device?.ip && ('http://' + device?.ip) || '')
+      }
+      updateDevice()
+      $('#node-input-device').on('change', updateDevice)
       $('#node-input-idx').on('change', updateName)
     }
   })

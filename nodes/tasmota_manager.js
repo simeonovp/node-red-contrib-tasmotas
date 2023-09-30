@@ -194,6 +194,7 @@ module.exports = function (RED) {
           this.log(`DevicesDb add group ${this.name} with idx ${this.grp}`)
           this.devicesDb.save(true)
         }
+        await this.downloadIcons()
 
         this._downloadDecodeConfig()
 
@@ -233,6 +234,54 @@ module.exports = function (RED) {
         pythonProcess.stderr.on('data', (data) => this.warn(data))
         pythonProcess.on('exit', (code, signal) => resolve(code))
       })
+    }
+
+    async downloadIcons(all, force) {
+      if (!this.devicesDb || !this.config.dbUri) return
+      const iconsDir = path.join(this.resDir, 'icons')
+      if (fs.existsSync(this.iconsdir)) if (!force) return
+      else fs.mkdirSync(this.iconsdir, { recursive: true })
+      const devices = this.devicesDb.data?.devices
+      if (!devices) return this.error('No devices table in DB')
+      const hws = this.devicesDb.data?.hardware
+      if (!hws) return this.error('No hardware table in DB')
+
+      const urlDir = new URL('../img/', this.config.dbUri).href
+      // const download = (uri, filename, callback) => {
+      //   request.head(uri, (err, res, body) => {
+      //     request(uri).pipe(fs.createWriteStream(filename)).on('close', callback)
+      //   })
+      // }
+      const saveIconFromUrl = async (url, iconPath) => {
+        this.log(`Download icon from url ${url} to ${iconPath}`)
+        try {
+          const response = await fetch(url)
+          const arrayBuffer = await response.arrayBuffer()
+          const buffer = Buffer.from(arrayBuffer)
+          const imgDir = path.dirname(iconPath)
+          if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true })
+          fs.createWriteStream(iconPath).write(buffer)
+        }
+        catch(err) {
+          this.error(err)
+        }
+      }
+
+      const hwList = all && hws || []
+      if (!all) {
+        for (const device of devices) {
+          if (device.fw && device.hw) {
+            const hw = !hwList.find(i => i.idx === device.hw) && hws.find(i => i.idx === device.hw)
+            if (hw) hwList.push(hw)
+          }
+        }
+      }
+      for (const hw of hwList) {
+        const img = hw?.img && (hw.img !== '?') && hw.img
+        if (!img) continue
+        const imgPath = path.join(iconsDir, img)
+        if (force || !fs.existsSync(imgPath)) await saveIconFromUrl(urlDir + img, imgPath)
+      }
     }
 
     // begin commands
