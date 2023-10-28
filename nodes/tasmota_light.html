@@ -22,6 +22,12 @@
     </label>
   </div>
   <div class="form-row">
+    <label for="node-input-dualLights" style="width:70%">
+      <input type="checkbox" id="node-input-dualLights" style="display:inline-block; width:15px; vertical-align:baseline;">
+      Dual lights (color and white)
+    </label>
+  </div>
+  <div class="form-row">
     <label for="node-input-havedimmer"><i class="fa fa-lightbulb-o"></i> Light features</label>
     <label for="node-input-havedimmer" style="width:70%">
       <input type="checkbox" id="node-input-havedimmer" style="display:inline-block; width:22px; vertical-align:baseline;">
@@ -49,6 +55,10 @@
       <option value="2">State, Dimmer</option>
       <option value="3">State, Dimmer, Temp</option>
       <option value="4">State, Dimmer, Temp, Colors</option>
+      <option value="2">States</option>
+      <option value="4">States, Dimmers</option>
+      <option value="5">States, Dimmers, Temp</option>
+      <option value="6">States, Dimmers, Temp, Colors</option>
     </select>
   </div>
   <div class="form-row">
@@ -67,6 +77,15 @@
       <option value="HSB">HSB [0-360, 0-100, 0-100]</option>
       <option value="RGB">RGB [0-255, 0-255, 0-255]</option>
       <option value="CHS">Channels [0-100, 0-100, 0-100]</option>
+      <option value="HEX">HEX [0-FF|0-FF|0-FF[|0-FF[|0-FF]]]</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="node-input-colorCmnd"><i class="fa fa-list-ul"></i> Color command</label>
+    <select id="node-input-colorCmnd">
+      <option value="" selected disabled hidden>Color1</option>
+      <option value="Color1">Color1</option>
+      <option value="Color2">Color2</option>
     </select>
   </div>
 </script>
@@ -190,11 +209,13 @@
       sendDevice: { value: true },
       uidisabler: { value: false },
       // node specific
+      dualLights: { value: true },
       havedimmer: { value: true },
       havetemp: { value: false },
       havecolors: { value: false },
       tempformat: { value: 'K' },
-      colorsformat: { value: 'HSB' }
+      colorsformat: { value: 'HSB' },
+      colorCmnd: { value: 'Color1' },
     },
     icon: 'tasmota-light.svg',
     paletteLabel: 'Light',
@@ -209,10 +230,12 @@
     outputLabels: function (index) {
       if (this.outputs > 1) {
         switch (index) {
-          case 0: return 'On/Off state'
-          case 1: return 'Brightness'
-          case 2: return 'Temperature'
-          case 3: return 'Colors'
+          case 0: return this.dualLights && 'On/Off state color' || 'On/Off state'
+          case 1: return this.dualLights && 'On/Off state white' || 'Brightness'
+          case 2: return this.dualLights && 'Brightness color' || 'Temperature'
+          case 3: return this.dualLights && 'Brightness state white' || 'Colors'
+          case 4: return 'Temperature'
+          case 5: return 'Colors'
         }
       }
     },

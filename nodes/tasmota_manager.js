@@ -14,7 +14,6 @@ function JSONparse(json) {
   }
   catch(err) {
     console.error(`Error JSON.parse(${json}):${err}`)
-    //console.warn(err.stack)
   }
 }
 

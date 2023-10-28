@@ -3,11 +3,13 @@ module.exports = function (RED) {
   const TasmotaBase = require('./tasmota_base.js')
 
   const LIGHT_DEFAULTS = {
+    dualLights: true, // SetOption37 >= 128
     havedimmer: true,
     havetemp: false,
     havecolors: false,
     tempformat: 'K',
-    colorsformat: 'HSB'
+    colorsformat: 'HSB',
+    colorCmnd: 'Color1'
   }
 
   // values for the tasmota POWER command
@@ -76,7 +78,7 @@ module.exports = function (RED) {
     constructor (config) {
       super(config, RED, LIGHT_DEFAULTS)
       this.cache = {} // light status cache, es: {on: true, bright:55, ct:153, colors:...}
-      this.colorCmnd = 'Color1' // TODO make Color1/2 configurable ?
+      this.colorCmnd = config.colorCmnd || 'Color1'
 
       // Subscribes to state changes
       this.mqttSubscribeStat('RESULT', (topic, payload) => {
@@ -90,165 +92,184 @@ module.exports = function (RED) {
     }
 
     onNodeInput (msg) {
-      let on, bright, ct
-      let rgb, hsb, hex, color
+      const data = {}
 
       // MODE 1: simple on/off/toggle (without topic)
       if (!msg.topic &&
           (typeof msg.payload === 'number' ||
            typeof msg.payload === 'boolean' ||
            typeof msg.payload === 'string')) {
-        on = msg.payload
+        data.on1 = msg.payload
       }
 
       // MODE 2: topic mode (with simple-typed payload)
-      if (msg.topic && typeof msg.topic === 'string' &&
-          (typeof msg.payload === 'boolean' ||
-           typeof msg.payload === 'number' ||
-           typeof msg.payload === 'string' ||
-           Array.isArray(msg.payload))) {
-        const cmd = msg.topic.toLowerCase()
-        if (cmd === 'on' || cmd === 'state' || cmd === 'power') {
-          on = msg.payload
-        } else if (cmd === 'bright' || cmd === 'brightness' || cmd === 'dimmer') {
-          bright = msg.payload
-        } else if (cmd === 'ct' || cmd === 'colortemp') {
-          ct = msg.payload
-        } else if (cmd === 'rgb' || cmd === 'rgbcolor') {
-          rgb = msg.payload
-        } else if (cmd === 'hsb' || cmd === 'hsbcolor') {
-          hsb = msg.payload
-        } else if (cmd === 'hex' || cmd === 'hexcolor') {
-          hex = msg.payload
-        } else if (cmd === 'color') {
-          color = msg.payload
+      const processCmd = (cmd) => {
+        switch (cmd) {
+          case 'on': case 'state': case 'power':
+            data.on1 = msg.payload
+            data.on2 = msg.payload
+            break
+          case 'power1':
+            data.on1 = msg.payload
+            break
+          case 'power2':
+            data.on2 = msg.payload
+            break
+          case 'bright': case 'brightness': case 'dimmer':
+            data.bright = msg.payload
+            break
+          case 'dimmerc':
+            data.dimmerc = msg.payload
+            break
+          case 'dimmerw':
+            data.dimmerw = msg.payload
+            break
+          case 'ct': case 'colortemp':
+            data.ct = msg.payload
+            break
+          case 'rgb': case 'rgbcolor':
+            data.rgb = msg.payload
+            break
+          case 'hsb': case 'hsbcolor':
+            data.hsb = msg.payload
+            break
+          case 'hex': case 'hexcolor':
+            data.hex = msg.payload
+            break
+          case 'color':
+            data.color = msg.payload
+            break
+          default:
+            this.error('Unsupported topic ' + cmd)
         }
+      }
+      if (msg.topic && (typeof msg.topic === 'string') &&
+          ((typeof msg.payload === 'boolean') ||
+           (typeof msg.payload === 'number') ||
+           (typeof msg.payload === 'string') ||
+           Array.isArray(msg.payload))) {
+        processCmd(msg.topic.toLowerCase())
       }
 
       // MODE 3: object payload (without topic)
       if (!msg.topic && typeof msg.payload === 'object') {
         for (const [key, value] of Object.entries(msg.payload)) {
-          const cmd = key.toLowerCase()
-          if (cmd === 'on' || cmd === 'state' || cmd === 'power') {
-            on = value
-          } else if (cmd === 'bright' || cmd === 'brightness' || cmd === 'dimmer') {
-            bright = value
-          } else if (cmd === 'ct' || cmd === 'colortemp') {
-            ct = value
-          } else if (cmd === 'rgb' || cmd === 'rgbcolor') {
-            rgb = value
-          } else if (cmd === 'hsb' || cmd === 'hsbcolor') {
-            hsb = value
-          } else if (cmd === 'hex' || cmd === 'hexcolor') {
-            hex = value
-          } else if (cmd === 'color') {
-            color = value
-          }
-        }
+          processCmd(key.toLowerCase())
+       }
       }
 
       // did we found something usefull?
-      if (on === undefined && bright === undefined && ct === undefined &&
-          rgb === undefined && hsb === undefined && hex === undefined && color === undefined) {
+      if (!Object.keys.length) {
         this.warn('Invalid message received on input')
         return
       }
 
       // on: true/false, 1/0, on/off, toggle (not case sensitive)
-      if (on !== undefined) {
+      const sendPower = (on, idx) => {
         switch (on.toString().toLowerCase()) {
           case '1':
           case 'on':
           case 'true':
-            this.mqttCommand('POWER', onValue)
+            this.mqttCommand('POWER' + idx, onValue)
             break
           case '0':
           case 'off':
           case 'false':
-            this.mqttCommand('POWER', offValue)
+            this.mqttCommand('POWER' + idx, offValue)
             break
           case 'toggle':
-            this.mqttCommand('POWER', toggleValue)
+            this.mqttCommand('POWER' + idx, toggleValue)
             break
           default:
-            this.warn('Invalid value for the \'on\' command (should be: true/false, 1/0, on/off or toggle)')
+            this.warn(`Invalid value for the 'power${idx}' command (should be: true/false, 1/0, on/off or toggle)`)
         }
       }
+      if (data.on1 !== undefined) sendPower(data.on1, 1)
+      if (data.on2 !== undefined) sendPower(data.on2, 2)
 
       // rgb: array[r,g,b] or string "r,g,b" (0-255, 0-255, 0-255)
-      if (rgb !== undefined) {
-        if (typeof rgb === 'string') {
-          this.mqttCommand(this.colorCmnd, rgb)
-        } else if (Array.isArray(rgb) && rgb.length === 3) {
-          this.mqttCommand(this.colorCmnd, rgb.toString())
-        } else {
+      if (data.rgb !== undefined) {
+        if (typeof data.rgb === 'string') {
+          this.mqttCommand(this.colorCmnd, data.rgb)
+        } 
+        else if (Array.isArray(data.rgb) && (data.rgb.length === 3)) {
+          this.mqttCommand(this.colorCmnd, data.rgb.toString())
+        } 
+        else {
           this.warn('Invalid value for the \'rgb\' command (should be: [r,g,b] [0-255, 0-255, 0-255])')
         }
       }
 
       // hsb: array[h,s,b] or string "h,s,b" (0-360, 0-100, 0-100)
-      if (hsb !== undefined) {
-        if (typeof hsb === 'string') {
-          this.mqttCommand('HsbColor', hsb)
-        } else if (Array.isArray(hsb) && hsb.length === 3) {
-          this.mqttCommand('HsbColor', hsb.toString())
-        } else {
+      if (data.hsb !== undefined) {
+        if (typeof data.hsb === 'string') {
+          this.mqttCommand('HsbColor', data.hsb)
+        } 
+        else if (Array.isArray(data.hsb) && data.hsb.length === 3) {
+          this.mqttCommand('HsbColor', data.hsb.toString())
+        } 
+        else {
           this.warn('Invalid value for the \'hsb\' command (should be: [h,s,b] [0-360, 0-100, 0-100])')
         }
       }
 
       // hex: #CWWW, #RRGGBB, #RRGGBBWW or #RRGGBBCWWW (with or without #)
-      if (hex !== undefined) {
-        if (typeof hex === 'string') {
-          hex = (hex[0] === '#') ? hex : '#' + hex
-          if (hex.length === 5 || hex.length === 7 || hex.length === 9 || hex.length === 11) {
-            this.mqttCommand(this.colorCmnd, hex)
-          } else {
-            this.warn('Invalid length for the \'hex\' command (should be: #CWWW, #RRGGBB, #RRGGBBWW or #RRGGBBCWWW)')
-          }
-        } else {
-          this.warn('Invalid type for the \'hex\' command (should be: #CWWW, #RRGGBB, #RRGGBBWW or #RRGGBBCWWW)')
-        }
+      if (data.hex !== undefined) {
+        if (typeof data.hex === 'string') {
+          data.hex = (data.hex[0] === '#') ? data.hex : '#' + data.hex
+          if ((data.hex.length === 5) || (data.hex.length === 7) || (data.hex.length === 9) || (data.hex.length === 11)) {
+            if (data.hex.length >  5) data.hex = (data.hex + '====').substring(0, 11)
+            this.mqttCommand(this.colorCmnd, data.hex)
+          } 
+          else this.warn('Invalid length for the \'hex\' command (should be: #CWWW, #RRGGBB, #RRGGBBWW or #RRGGBBCWWW)')
+        } 
+        else this.warn('Invalid type for the \'hex\' command (should be: #CWWW, #RRGGBB, #RRGGBBWW or #RRGGBBCWWW)')
       }
 
       // color: ColorName or +/- (next/prev color)
-      if (color !== undefined) {
-        if (typeof color === 'string') {
-          const colorCode = TASMOTA_COLORS[color.replace(/\s/g, '').toLowerCase()]
+      if (data.color !== undefined) {
+        if (typeof data.color === 'string') {
+          const colorCode = TASMOTA_COLORS[data.color.replace(/\s/g, '').toLowerCase()]
           if (colorCode !== undefined) {
             this.mqttCommand(this.colorCmnd, colorCode)
-          } else {
-            this.warn('Invalid value for the \'color\' command (should be a color name or +/-)')
-          }
-        } else {
-          this.warn('Invalid type for the \'color\' command (should be a string)')
-        }
+          } 
+          else this.warn('Invalid value for the \'color\' command (should be a color name or +/-)')
+        } 
+        else this.warn('Invalid type for the \'color\' command (should be a string)')
       }
 
       // bright: 0-100
-      if (bright !== undefined) {
-        bright = parseInt(bright)
-        if (isNaN(bright) || bright < 0 || bright > 100) {
+      const sendDimmer = (dimmer, idx) => {
+        idx = idx && idx.toString() || ''
+        dimmer = parseInt(dimmer)
+        if (isNaN(dimmer) || (dimmer < 0) || (dimmer > 100)) {
           this.warn('Invalid value for the \'bright\' command (should be: 0-100)')
-        } else {
-          this.mqttCommand('Dimmer', bright.toString())
+          return
         }
+        this.mqttCommand('Dimmer' + idx, dimmer.toString())
       }
+      if (data.bright !== undefined) sendDimmer(data.bright)
+      if (data.dimmerc !== undefined) sendDimmer(data.dimmerc, 1)
+      if (data.dimmerw !== undefined) sendDimmer(data.dimmerw, 2)
 
       // ct: 500-153, 2000-6500, 0-100 (warm to cold)
-      if (ct !== undefined) {
-        ct = parseInt(ct)
-        if (isNaN(ct)) {
+      if (data.ct !== undefined) {
+        data.ct = parseInt(data.ct)
+        if (isNaN(data.ct)) {
           this.warn('Invalid value for the \'ct\' command (should be: 0-100, 2000-6500 or 500-153)')
-        } else if (ct >= 153 && ct <= 500) { // ct in mired (cold to warm)
+        } 
+        else if ((data.ct >= 153) && (data.ct <= 500)) { // ct in mired (cold to warm)
           this.mqttCommand('CT', ct.toString())
-        } else if (ct >= 0 && ct <= 100) { // ct in percent (warm to cold)
-          ct = percent2mired(ct)
-          this.mqttCommand('CT', ct.toString())
-        } else if (ct >= 2000 && ct <= 6500) { // ct in kelvin (warm to cold)
-          ct = kelvin2mired(ct)
-          this.mqttCommand('CT', ct.toString())
-        } else {
+        } 
+        else if ((data.ct >= 0) && (data.ct <= 100)) { // ct in percent (warm to cold)
+          data.ct = percent2mired(data.ct)
+          this.mqttCommand('CT', data.ct.toString())
+        } 
+        else if ((data.ct >= 2000) && (data.ct <= 6500)) { // ct in kelvin (warm to cold)
+          data.ct = kelvin2mired(data.ct)
+          this.mqttCommand('CT', data.ct.toString())
+        } 
+        else {
           this.warn('Invalid value for the \'ct\' command (should be: 0-100, 2000-6500 or 500-153)')
         }
       }
@@ -266,11 +287,13 @@ module.exports = function (RED) {
       }
 
       // update cache with the received data
-      if (data.POWER !== undefined) {
-        this.cache.on = (data.POWER === onValue)
-      }
-      if (this.config.havedimmer && data.Dimmer !== undefined) {
-        this.cache.bright = data.Dimmer
+      if (data.POWER !== undefined) { this.cache.on = (data.POWER === onValue) }
+      if (data.POWER1 !== undefined) { this.cache.on1 = (data.POWER1 === onValue) }
+      if (data.POWER2 !== undefined) { this.cache.on2 = (data.POWER2 === onValue) }
+      if (this.config.havedimmer) {
+        if (data.Dimmer !== undefined) { this.cache.bright = data.Dimmer }
+        if (data.Dimmer1 !== undefined) { this.cache.dimmer1 = data.Dimmer1 }
+        if (data.Dimmer2 !== undefined) { this.cache.dimmer2 = data.Dimmer2 }
       }
       if (this.config.havetemp && data.CT !== undefined) {
         if (this.config.tempformat === 'K') {
@@ -281,17 +304,28 @@ module.exports = function (RED) {
           this.cache.ct = data.CT
         }
       }
-      if (this.config.havecolors && data.HSBColor !== undefined) {
-        const hsb = data.HSBColor.split(',').map(Number)
-        if (this.config.colorsformat === 'HSB') {
-          this.cache.colors = hsb
-        } else if (this.config.colorsformat === 'RGB') {
-          this.cache.colors = hsb2rgb(hsb[0], hsb[1], hsb[2])
-        } else { // Channels
-          this.cache.colors = data.Channel
+      if (this.config.havecolors) {
+        if (data.HSBColor !== undefined) {
+          const hsb = data.HSBColor.split(',').map(Number)
+          if (this.config.colorsformat === 'HSB') {
+            this.cache.colors = hsb
+          } 
+          else if (this.config.colorsformat === 'RGB') {
+            this.cache.colors = hsb2rgb(hsb[0], hsb[1], hsb[2])
+          } 
+          else if (this.config.colorsformat === 'HEX') {
+            this.cache.colors = data.Color
+          } 
+          else { // Channels
+            this.cache.colors = data.Channel
+          }
         }
       }
+      if (data.Channel !== undefined) {
+        this.cache.channel = data.Channel
+      }
 
+      const msg = (payload) => (payload !== undefined) && { payload } || null
       // send all the cached data to the node output(s)
       // or send each value to the correct output
       if (this.config.outputs === 1 || this.config.outputs === '1') {
@@ -299,26 +333,57 @@ module.exports = function (RED) {
         this.onSend({ payload: this.cache })
       } 
       else if (this.config.outputs === 2 || this.config.outputs === '2') {
-        this.onSend([
-          { payload: this.cache.on }, // Output 1: on/off status
-          { payload: this.cache.bright } // Output 2: brightness
+        if (this.config.dualLights) this.onSend([
+          msg(this.cache.on1), // Output 1: on/off status color
+          msg(this.cache.on2) // Output 2: on/off status white
+        ])
+        else this.onSend([
+          msg(this.cache.on), // Output 1: on/off status
+          msg(this.cache.bright) // Output 2: brightness
         ])
       }
       else if (this.config.outputs === 3 || this.config.outputs === '3') {
+        if (this.config.dualLights) return this.error('Invalide output count. must be odd for dual lights mode')
         this.onSend([
-          { payload: this.cache.on }, // Output 1: on/off status
-          { payload: this.cache.bright }, // Output 2: brightness
-          { payload: this.cache.ct } // Output 3: temperature
+          msg(this.cache.on), // Output 1: on/off status
+          msg(this.cache.bright), // Output 2: brightness
+          msg(this.cache.ct) // Output 3: temperature
         ])
       }
       else if (this.config.outputs === 4 || this.config.outputs === '4') {
-        this.onSend([
-          { payload: this.cache.on }, // Output 1: on/off status
-          { payload: this.cache.bright }, // Output 2: brightness
-          { payload: this.cache.ct }, // Output 3: temperature
-          { payload: this.cache.colors } // Output 4: colors
+        if (this.config.dualLights) this.onSend([
+          msg(this.cache.on1), // Output 1: on/off status color
+          msg(this.cache.dimmer1), // Output 2: brightness color
+          msg(this.cache.on2), // Output 3: on/off status white
+          msg(this.cache.dimmer2) // Output 4: brightness white
+        ])
+        else this.onSend([
+          msg(this.cache.on), // Output 1: on/off status
+          msg(this.cache.bright), // Output 2: brightness
+          msg(this.cache.ct), // Output 3: temperature
+          msg(this.cache.colors) // Output 4: colors
         ])
       }
+      else if (this.config.outputs === 5 || this.config.outputs === '5') {
+        if (this.config.dualLights) this.onSend([
+          msg(this.cache.on1), // Output 1: on/off status color
+          msg(this.cache.dimmer1), // Output 2: brightness color
+          msg(this.cache.on2), // Output 3: on/off status white
+          msg(this.cache.dimmer2), // Output 4: brightness white
+          msg(this.cache.ct), // Output 5: temperature color
+        ])
+      }
+      else if (this.config.outputs === 6 || this.config.outputs === '6') {
+        if (this.config.dualLights) this.onSend([
+          msg(this.cache.on1), // Output 1: on/off status color
+          msg(this.cache.dimmer1), // Output 2: brightness color
+          msg(this.cache.on2), // Output 3: on/off status white
+          msg(this.cache.dimmer2), // Output 4: brightness white
+          msg(this.cache.ct), // Output 5: temperature color
+          msg(this.cache.colors) // Output 6: colors
+        ])
+      }
+      else return this.error('Invalide output count.')
 
       // update node status label
       let status
@@ -327,6 +392,11 @@ module.exports = function (RED) {
       }
       if (this.cache.bright !== undefined) {
         status += ` bri:${this.cache.bright}%`
+      }
+      if ((this.cache.on1 !== undefined) && (this.cache.on1 !== undefined)) {
+        status = `
+${this.cache.on1 ? 'On' : 'Off'}${this.cache.dimmer1 ? ' (' + this.cache.dimmer1 + '%)' : ''} - 
+${this.cache.on2 ? 'On' : 'Off'}${this.cache.dimmer2 ? ' (' + this.cache.dimmer2 + '%)' : ''}`
       }
       if (this.cache.ct !== undefined) {
         status += ` ct:${this.cache.ct}`

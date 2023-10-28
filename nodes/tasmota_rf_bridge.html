@@ -50,7 +50,7 @@
       name: { value: '' },
       sendDevice: { value: true },
       uidisabler: { value: false },
-      canReceive: { value: false }
+      canReceive: { value: true }
     },
     icon: 'tasmota-rf-bridge.svg',
     paletteLabel: 'RF Bridge',
@@ -68,6 +68,9 @@
       $('#node-input-device').on('change', function() {
         $('#node-input-name').attr('placeholder', $('#node-input-device option:selected').text())
       })
+    },
+    oneditsave: function() {
+      if (this.canReceive === undefined) this.canReceive = $('#node-input-canReceive').is(':checked')
     }
   })
 </script>
