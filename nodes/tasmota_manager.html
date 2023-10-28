@@ -17,6 +17,7 @@
     <button type="button" id="tasmota-upgrade-devices" class="red-ui-button">
       <i class="fa fa-refresh"></i>
     </button>
+    <p>(Upgrade existing tasmota nodes after upgrade package version)</p>
   </div>
 </script>
 
@@ -37,6 +38,7 @@
     label: function() {
       // use label callback to perform init
       if (!this.init) {
+        this.init = true
         this.resDir = 'resources/node-red-contrib-tasmotas/' + (this.name || 'default')
         this.configDir = this.resDir + '/configs'
         this.getMqttMap = (() => {
@@ -44,11 +46,19 @@
           this._mqttMap = {}
           fetch(this.resDir + '/mqtt_map.json').then(r=>r.json().then(d=>this._mqttMap=d))
         }).bind(this)
-        this.getDevices = (() => {
-          if (this._devices) return this._devices
-          this._devices = {}
-          fetch(this.resDir + '/devices.json').then(r=>r.json().then(d=>this._devices=d))
+        this.getDbDevices = (() => {
+          if (this._dbDevices) return this._dbDevices
+          this._dbDevices = {}
+          fetch(this.resDir + '/devices.json').then(r=>r.json().then(d=>this._dbDevices=d))
         }).bind(this)
+
+        this.getNetDevices = (async (force) => {
+          if (this._netDevices && !force) return this._netDevices
+          // return await this.scanNetwork()
+          this._netDevices = {}
+          fetch(this.resDir + '/netDevices.json').then(r=>r.json().then(d=>this._netDevices=d))
+        }).bind(this)
+
         this.addDevice =  (obj) => {
           const type = 'tasmota-device'
           const _def = RED.nodes.getType(type)
@@ -61,9 +71,12 @@
           const e = obj ? {...y, ...obj} : y
           RED.nodes.add(e)
         }
-        this.getDevices()
+        this.getDbDevices()
         this.getMqttMap()
-        this.init = true
+        this.getNetDevices()
+        
+        // RED.events.on('runtime-event', function(event) {
+        // })
       }
       return this.name || 'Manager'
     },

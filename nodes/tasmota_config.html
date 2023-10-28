@@ -8,19 +8,55 @@
     <input type="text" id="node-input-name" placeholder="Name">
   </div>
   <hr>
-  <div style="width:100%">
-    <table id="device-table" class="table table-hover" style="border:1px solid;border-collapse:collapse;width:100%">
-      <thead>
-        <tr id="table-head">
-          <th style="width:10%"></th>
-          <th style="text-align:left;width:20%">Host</th>
-          <th style="text-align:left">Node name</th>
-          <th style="width:10%"></th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div></script>
+  <div class="form-row">
+    <ul id="tasmota-device-tabs"></ul>
+  </div>
+  <div id="tasmota-device-content">
+    <div id="tasmota-dbdevices" style="display:none">
+      <div class="form-row">
+        <label for="tasmota-refresh-db"><i class="fa fa-tag"></i> Refresh DB</label>
+        <button type="button" id="tasmota-refresh-db" class="red-ui-button">
+          <i class="fa fa-refresh"></i>
+        </button>
+      </div>
+      <div style="width:100%">
+        <table id="dbdevices-table" class="table table-hover" style="border:1px solid;border-collapse:collapse;width:100%">
+          <thead>
+            <tr id="table-head">
+              <th style="width:10%"></th>
+              <th style="text-align:left;width:20%">Host</th>
+              <th style="text-align:left">Node name</th>
+              <th style="width:10%"></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="tasmota-netdevices" style="display:none">
+      <div class="form-row">
+        <label for="tasmota-refresh-netdevices"><i class="fa fa-tag"></i> Scan devices</label>
+        <button type="button" id="tasmota-refresh-netdevices" class="red-ui-button">
+          <i class="fa fa-refresh"></i>
+        </button>
+      </div>
+      <div style="width:100%">
+        <table id="netdevices-table" class="table table-hover" style="border:1px solid;border-collapse:collapse;width:100%">
+          <thead>
+            <tr id="table-head">
+              <th style="text-align:left;width:20%">Host</th>
+              <th style="text-align:left;width:20%">Ip</th>
+              <th style="text-align:left;width:20%">Mac</th>
+              <th style="text-align:left">Node name</th>
+              <th style="width:10%"></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</script>
 
 <script type="text/html" data-help-name="tasmota-config">
   <p>A node to manage the Tasmota devices.</p>
@@ -40,6 +76,17 @@
 </script>
 
 <script type="text/javascript">
+  function sendTasmotaMsg(node, msg, cb) {
+    $.ajax({
+      url: 'tasmota/' + node.id,
+      type: 'POST',
+      data: JSON.stringify(msg),
+      contentType: 'application/json; charset=utf-8',
+      success: cb || ((resp) => console.log('sendTasmotaMsg success')),
+      error: ((jhXHR, textStatus, errorThrown) => console.log('sendTasmotaMsg error')),
+    })
+  }
+
   RED.nodes.registerType('tasmota-config', {
     category: 'tasmota',
     color: '#10AF80',
@@ -47,6 +94,12 @@
       manager: { type: 'tasmota-manager', required: false },
       name: { value: '' }
     },
+    // button: {
+    //   enabled: function() { return true },
+    //   visible: function() { return true },
+    //   //toggle: 'buttonState',
+    //   onclick: function() { }
+    // },
     icon: 'tasmota-config.svg',
     paletteLabel: 'Config',
     inputs: 1,
@@ -62,29 +115,53 @@
       return this.name ? 'node_label_italic' : ''
     },
     oneditprepare: function () {
-      const deviceNodes = {} // device map by mac
-      RED.nodes.eachConfig(n => { if (n.type === 'tasmota-device') deviceNodes[n.mac] = n })
+      const tabs = RED.tabs.create({
+        id: 'tasmota-device-tabs',
+        onchange: function (tab) {
+          $('#tasmota-device-content').children().hide()
+          $('#' + tab.id).show()
+        }
+      })
+      tabs.addTab({ id: 'tasmota-dbdevices', label: 'DB Devices' })
+      tabs.addTab({ id: 'tasmota-netdevices', label: 'Net Devices' })
       
-      const mqttBrockers = {} //TODO map by ip
+      const deviceNodes = {} // device map by mac
+      RED.nodes.eachConfig(n => { if (n.type === 'tasmota-device') deviceNodes[n.mac.toUpperCase()] = n })
+      
+      const mqttBrockers = {} // brocker map by ip
       RED.nodes.eachConfig(n => { if (n.type === 'tasmota-mqtt-broker') mqttBrockers[n.broker] = n })
       
-      const fillDevices = () => {
-        $('#device-table > tbody').html('')
+      const addButtonHandler = (suffix, ip) => {
+        $(`#add-node-${suffix}`).click(() => {
+          const name = $(`#node-name-${suffix}`).val()
+          const device = ip && (ip !== '?') && mqttMap[ip] || ''
+          const devConfig = device && devConfigs[device]
+          const broker = devConfig?.mqtt_host && mqttBrockers[devConfig.mqtt_host] || ''
+          const config = { project: this.project, broker, device, name }
+          this.project.addDevice(config)
+          $(`#add-node-${suffix}`).hide()
+          $(`#node-name-${suffix}`).attr('readonly','readonly')
+        })
+      }
+      
+      const fillDbDevices = (db) => {
+        $('#dbdevices-table > tbody').html('')
         if (!this.project) return
-        const db = this.project && this.project.getDevices()
+        db = db || this.project && this.project.getDbDevices()
         if (!db?.devices) return
         const ilist = []
         const resDir = this.project.resDir || ''
         const dbDevices = {}
         for (const dev of db.devices) {
           if (!dev.fw || !dev.mac || (dev.mac === '?') || !dev.host || (dev.host === '?')) continue
-          dbDevices[dev.mac] = dev
+          const mac = dev.mac.toUpperCase()
+          dbDevices[mac] = dev
           let shapshotUri = '' 
           if (dev.hw) {
             const hw = db.hardware.find(row => row.idx === dev.hw)
             if (hw?.img) shapshotUri = `${resDir}/icons/${hw.img}` //SmartHome\img\
           }
-          const node = deviceNodes[dev.mac] || { name: dev.name, host: dev.host }
+          const node = deviceNodes[mac] || { name: dev.name, host: dev.host }
           ilist.push(`
             <tr>
               <td><input type="image" src="${shapshotUri}" name="${dev.name}" width="48" height="48" alt="${dev.name}"/></td>
@@ -98,23 +175,106 @@
             </tr>
           `)
         }
+        $('#dbdevices-table tbody').append(ilist.join(''))
         const mqttMap = this.project.getMqttMap() || {}
-        $('#device-table tbody').append(ilist.join(''))
-        for (const mac in dbDevices) {
-          const dev = dbDevices[mac]
-          $(`#add-node-${dev.idx}`).click(() => {
-            const name = $(`#node-name-${dev.idx}`).val()
-            const device = dev.ip && (dev.ip !== '?') && mqttMap[dev.ip] || ''
-            const devConfig = device && devConfigs[device]
-            const broker = devConfig?.mqtt_host && mqttBrockers[devConfig.mqtt_host] || ''
-            const config = { project: this.project, broker, device, name: dev.name }
-            this.project.addDevice(config)
-            $(`#add-node-${dev.idx}`).hide()
-            $(`#node-name-${dev.idx}`).attr('readonly','readonly')
-          })
-        }
+        for (const dev of Object.values(dbDevices)) addButtonHandler(dev.idx, dev.ip)
       }
-      fillDevices()
+      fillDbDevices()
+
+      $('#tasmota-refresh-db').click(() => {
+        const notificationTopic = 'notification/#'
+        if (this.notificationHandler) RED.comms.unsubscribe(notificationTopic, this.notificationHandler)
+        this.notificationHandler = ((topic, payload) => {
+          const parts = topic.split('/')
+          if (parts[1] !== this.id) return
+          fillDbDevices(payload)
+        }).bind(this)
+
+        RED.comms.subscribe(notificationTopic, this.notificationHandler)
+        const node = this
+        sendTasmotaMsg(node, {topic: 'refreshDb'}, (resp) => {
+          //...
+        })
+      })
+      const fillNetDevices = async (netDevices) => {
+        $('#netdevices-table > tbody').html('')
+        if (!this.project) return
+        netDevices = netDevices || this.project && await this.project.getNetDevices()
+        if (!netDevices) {
+          //RED.node.send({ topic: 'scanNetwork' })
+          return
+        }
+        const ilist = []
+        for (const dev of Object.values(netDevices)) {
+          const mac = dev.Mac
+          const node = deviceNodes[mac] || {
+            //TODO
+            name: '', 
+            host: dev.Hostname 
+          }
+          ilist.push(`
+            <tr>
+              <td><a href="http://${dev.IPAddress}" target="_blank">${dev.Hostname}</a></td>
+              <td><a href="http://${dev.IPAddress}" target="_blank">${dev.IPAddress}</a></td>
+              <td><input type="text" value="${dev.Mac}" style="width:100%" readonly></td>
+              <td><input type="text" id="node-name-${dev.Hostname}" value="${node.device?.name || ''}" style="width:100%"${node.device && ' readonly' || ''}></td>
+              <td>
+                <button type="button" id="add-node-${dev.Hostname}" ${node.device && 'hidden' || 'class="red-ui-button"'}>
+                  <i class="fa fa-plus"></i>
+                </button>
+              </td> 
+            </tr>
+          `)
+        }
+        $('#netdevices-table tbody').append(ilist.join(''))
+        for (const dev of Object.values(netDevices)) addButtonHandler(dev.Hostname, dev.IPAddress)
+      }
+      fillNetDevices()
+
+      // RED.comms keys:connect,subscribe,unsubscribe
+      $('#tasmota-refresh-netdevices').click(() => {
+        const statusTopic = 'status/#'
+        if (this.statusHandler) RED.comms.unsubscribe(statusTopic, this.statusHandler)
+        this.statusHandler = ((topic, msg) => {
+          const parts = topic.split('/')
+          if (parts[1] !== this.id) return
+          //msg:{"text":"scan","fill":"yellow","shape":"dot"}
+          if (this.statusHandler && (msg?.text === 'ready')) {
+            RED.comms.unsubscribe(statusTopic, this.statusHandler)
+            this.statusHandler = null
+            this.project.getNetDevices(true)
+          }
+        }).bind(this)
+
+        const notificationTopic = 'notification/#'
+        if (this.notificationHandler) RED.comms.unsubscribe(notificationTopic, this.notificationHandler)
+        this.notificationHandler = ((topic, payload) => {
+          const parts = topic.split('/')
+          if (parts[1] !== this.id) return
+          //msg:{"text":"scan","fill":"yellow","shape":"dot"}
+          fillNetDevices(payload)
+        }).bind(this)
+
+        RED.comms.subscribe(notificationTopic, this.statusHandler)
+        RED.comms.subscribe(notificationTopic, this.notificationHandler)
+        const node = this
+        sendTasmotaMsg(node, {topic: 'scanNetwork'}, (resp) => {
+          //...
+        })
+      })
+
+      //https://nodered.org/docs/api/ui/events/ 
+      //RED.comms.subscribe("notification/runtime-deploy",function(topic,msg) {})
+      //RED.comms.subscribe("notification/#",function(topic,msg) {})
+      //RED.comms.subscribe("notification/node/#",function(topic,msg) {})
+      //RED.comms.subscribe("event-log/#", function(topic,payload) {})
+
+      //https://www.prescientdevices.com/en/blog/how-to-communicate-between-node-red-editor-and-node-red-runtime
     }
   })
+
+  // RED.nodes.subscribe('notification/#', (topic, payload) {
+  //   if (!topic.startsWith('notification/mytopic')) return
+  //   //...
+  // })
 </script>

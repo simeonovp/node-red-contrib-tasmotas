@@ -401,9 +401,9 @@ module.exports = function (RED) {
       }
     }
 
-    async scanNetwork() {
+    async scanNetwork(progress) {
       if (!this.config.network) return this.error('Network not configured')
-      try{
+      try {
         const parts = this.config.network.split('/')
         const ipBytes = parts[0].split('.')
         if (ipBytes.length !== 4) return this.error('Format error, ip:' + parts[0])
@@ -412,26 +412,39 @@ module.exports = function (RED) {
         const prefix = (parts.length > 1) && parseInt(parts[1]) || 24
         if (prefix < 16) return this.error('Min supported prefix is 16, configured prefix:' + prefix)
         const mask = (1 << (32 - prefix)) - 1
-        const minAdr = ipAdr & ~mask
+        const minAdr = (ipAdr & ~mask)
         const maxAdr = (minAdr + mask)
         const intToIP = (ip) => [24, 16, 8, 0].map(n => (ip >> n) & 0xff).join('.')
         
         this.log(`Scan from ${intToIP(minAdr + 1)} to ${intToIP(maxAdr - 1)}`)
         if (this.busy) return
         this.busy = true
+        const adrCount = maxAdr - minAdr - 1
+        const devList = {}
         for (let ip = minAdr + 1; ip < maxAdr; ip++) {
+          if (progress) progress(ip - minAdr, adrCount)
           const ipStr = intToIP(ip)
-          if (!this.mqttMap[ipStr]) {
-            try {
-              const res = await this.httpCommand(ipStr, 'Topic', '', 2000)
-              res && this.log('Found Tasmota device at ' + ipStr)
-              this.downloadConfig(ipStr)
-            }
-            catch(err) { }
+          try {
+            const res = await this.httpCommand(ipStr, 'Status', '5', 500)
+            if (!res || !res?.StatusNET) continue
+            this.log('Found Tasmota device at ' + ipStr)
+            //{"StatusNET":{"Hostname":"t1-01","IPAddress":"192.168.1.41","Gateway":"192.168.1.100","Subnetmask":"255.255.255.0","DNSServer":"192.168.1.200","Mac":"60:01:94:AD:95:30","Webserver":2,"WifiConfig":2,"WifiPower":17.0}}
+            devList[res.StatusNET.Mac] = res.StatusNET
+            this.downloadConfig(ipStr)
+          }
+          catch(err) { 
+            //this.error('Scan device error:' + err)
           }
         }
+        //Add to cache (netDevices.json)
+        const netDevicesPath = path.join(this.resDir, 'netDevices.json')
+        this.netDevices = fs.existsSync(netDevicesPath) && JSONparse(fs.readFileSync(netDevicesPath, 'utf8')) || {}
+        this.netDevices = Object.assign(this.netDevices, devList)
+        fs.createWriteStream(netDevicesPath).write(JSON.stringify(this.netDevices, null, 2))
+
+        return devList
       }
-      catch(err){
+      catch(err) {
         this.error(err)
       }
       this.busy = false

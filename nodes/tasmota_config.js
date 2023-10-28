@@ -65,10 +65,17 @@ module.exports = function (RED) {
           await this.manager.downloadAllConfigs(msg.force)
           break
         case 'scanNetwork':
-          await this.manager.scanNetwork()
+          this.status({ text: 'scan', fill: 'yellow', shape: 'dot' })
+          const devList = await this.manager.scanNetwork((idx, count) => this.status({ text: `scan ${idx}/${count}`, fill: 'yellow', shape: 'dot' }))
+          this.status({ text: 'ready', fill: 'green', shape: 'dot' })
+          RED.events.emit('runtime-event', { id: this.id, retain: false, payload: devList })
+          break
+        case 'refreshDb':
+          await this.manager.initialize(true)
+          RED.events.emit('runtime-event', { id: this.id, retain: false, payload: this.manager.devicesDb?.data || {} })
           break
         default:
-          this.warn('Unknown action:' + msg.action)
+          this.warn(`Unknown action:${msg.action}, msg:${JSON.stringify(msg)}`)
           return done()
         }
         send(msg)
@@ -81,4 +88,22 @@ module.exports = function (RED) {
   }
 
   RED.nodes.registerType('tasmota-config', TasmotaConfig)
+
+  //#.node-red\node_modules\@node-red\nodes\core\common\20-inject.js
+  RED.httpAdmin.post(
+    '/tasmota/:id',
+    RED.auth.needsPermission('inject-comm.write'),
+    (req, res) => {
+      const node = RED.nodes.getNode(req.params.id)
+      if (!node) return res.sendStatus(404)
+      try {
+        if (req.body) node.receive(req.body)
+        res.sendStatus(200)
+      }
+      catch(err) {
+        res.sendStatus(500)
+        node.error(RED._('inject-comm.failed', { error: err.toString() }))
+      }
+    }
+  )
 }

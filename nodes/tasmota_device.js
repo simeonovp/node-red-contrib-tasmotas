@@ -103,7 +103,7 @@ module.exports = function (RED) {
 
       if (device.isOnline) {
         this.device.mqttCommand('POWER' +  this.channel)
-        startTimer()
+        this.startTimer()
       }
     }
 
