@@ -285,7 +285,8 @@ module.exports = function (RED) {
             this.config[key] = parseInt(config[key])
           }
           else this.config[key] = config[key]
-        } else {
+        } 
+        else {
           this.config[key] = defaults[key]
         }
       }

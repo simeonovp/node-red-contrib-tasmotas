@@ -325,3 +325,43 @@
     return arr && arr.find(row => (row[col] === val))
   }
 </script>
+
+<script type="text/javascript">
+  const tasmotaBaseDefaults = {
+    device: { type: 'tasmota-device', required: true },
+    name: { value: '' },
+    outputs: { value: 1 },
+    sendDevice: { value: true },
+    crashMonitor: { value: true },
+    uidisabler: { value: false },
+  }
+
+  const oneditprepareTasmotaBase = () => {
+    //add template HTML
+    $('#tasmota-base-inherited').html(`
+    <div class="form-row">
+      <label for="node-input-device"><i class="fa fa-dot-circle-o"></i> Device</label>
+      <input type="text" id="node-input-device">
+    </div>
+    <div class="form-row">
+      <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+      <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <hr>
+    <div class="form-row">
+      <label for="node-input-sendDevice" style="width:70%"> Send device name</label>
+      <input type="checkbox" id="node-input-sendDevice" style="display:inline-block; width:15px; vertical-align:baseline;">
+    </div>
+    <div class="form-row">
+      <label for="node-input-crashMonitor" style="width:70%"> Monitor device exceptions</label>
+      <input type="checkbox" id="node-input-crashMonitor" style="display:inline-block; width:15px; vertical-align:baseline;">
+    </div>
+    `)
+
+    if (!this.device) $('#node-input-device').val('_ADD_')
+    $('#node-input-name').attr('placeholder', $('#node-input-device option:selected').text())
+    $('#node-input-device').on('change', function() {
+      $('#node-input-name').attr('placeholder', $('#node-input-device option:selected').text())
+    })
+  }
+</script>

@@ -6,6 +6,7 @@ const TASMOTA_DEFAULTS = {
   name: '',
   outputs: 1,
   sendDevice: true,
+  crashMonitor: false,
   uidisabler: false
 }
 
@@ -29,7 +30,7 @@ class TasmotaBase {
           this.config[key] = parseInt(config[key])
         }
         else this.config[key] = config[key]
-      } 
+      }
       else {
         this.config[key] = defaults[key]
       }
@@ -68,9 +69,11 @@ class TasmotaBase {
     this.on('close', (done) => {
       this.closing = true
       this.deviceNode.removeListener(this.type + (this.config.idx || ''), this._onDeviceEvent.bind(this))
-      this.deregister(this)
+      this.deviceNode.deregister(this)
       done()
     })
+
+    if (this.config.crashMonitor) this.mqttSubscribeTele('INFO3', (topic, payload) => this.onRestart(topic, payload))
   }
 
   _onMqttEvent(ev) {
@@ -171,7 +174,8 @@ class TasmotaBase {
         text: text,
         shape: shape || 'dot'
       })
-    } else {
+    }
+    else {
       this.status({
         fill: 'red',
         shape: 'ring',
@@ -195,6 +199,16 @@ class TasmotaBase {
   extractChannelNum(str) {
     const numberRegexp = /\d+$/
     return Number(str.match(numberRegexp) || 1)
+  }
+
+
+  onRestart(topic, payload) {
+    //00:00:07 MQT: tasmota/t1_03/tele/INFO3 = {"RestartReason":{"Exception":29,"Reason":"Exception","EPC":["4000df64","00000000","00000000"],"EXCVADDR":"00000000","DEPC":"00000000","CallChain":["40101468","4025e5d7","4025e56c","4025e513","4025d674","4025d69d","4025b108","40101b7e","40253814","4025746d","4024c0dd","4025bdff","402534c4","4025b872","40264fc7","40264887","40243314","40000f49","40000f49","40000e19","40105909","4010590f","4010000d","4026376c","4026371d","40104609","40105751","40105336","40104c85","402494fa","40105239"]}}
+    //00:00:06.066 MQT: tasmota/t1_03/tele/INFO3 = {"Info3":{"RestartReason":"Software/System restart","BootCount":940}}
+    const restartReason = payload.Info3?.RestartReason || payload.RestartReason
+    if (restartReason?.Exception) {
+      this.error('Exception: ' + JSON.stringify(restartReason, null, 2))
+    }
   }
 }
 
