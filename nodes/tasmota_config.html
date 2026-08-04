@@ -7,7 +7,20 @@
     <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
     <input type="text" id="node-input-name" placeholder="Name">
   </div>
-</script>
+  <hr>
+  <div style="width:100%">
+    <table id="device-table" class="table table-hover" style="border:1px solid;border-collapse:collapse;width:100%">
+      <thead>
+        <tr id="table-head">
+          <th style="width:10%"></th>
+          <th style="text-align:left;width:20%">Host</th>
+          <th style="text-align:left">Node name</th>
+          <th style="width:10%"></th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div></script>
 
 <script type="text/html" data-help-name="tasmota-config">
   <p>A node to manage the Tasmota devices.</p>
@@ -39,12 +52,69 @@
     inputs: 1,
     outputs: 1,
     label: function () {
+      if (!this.init) {
+        this.project = this.manager && RED.nodes.node(this.manager)
+        this.init = true
+      }
       return this.name || this.manager && RED.nodes.node(this.manager).name || 'Config'
     },
     labelStyle: function () {
       return this.name ? 'node_label_italic' : ''
     },
     oneditprepare: function () {
+      const deviceNodes = {} // device map by mac
+      RED.nodes.eachConfig(n => { if (n.type === 'tasmota-device') deviceNodes[n.mac] = n })
+      
+      const mqttBrockers = {} //TODO map by ip
+      RED.nodes.eachConfig(n => { if (n.type === 'tasmota-mqtt-broker') mqttBrockers[n.broker] = n })
+      
+      const fillDevices = () => {
+        $('#device-table > tbody').html('')
+        if (!this.project) return
+        const db = this.project && this.project.getDevices()
+        if (!db?.devices) return
+        const ilist = []
+        const resDir = this.project.resDir || ''
+        const dbDevices = {}
+        for (const dev of db.devices) {
+          if (!dev.fw || !dev.mac || (dev.mac === '?') || !dev.host || (dev.host === '?')) continue
+          dbDevices[dev.mac] = dev
+          let shapshotUri = '' 
+          if (dev.hw) {
+            const hw = db.hardware.find(row => row.idx === dev.hw)
+            if (hw?.img) shapshotUri = `${resDir}/icons/${hw.img}` //SmartHome\img\
+          }
+          const node = deviceNodes[dev.mac] || { name: dev.name, host: dev.host }
+          ilist.push(`
+            <tr>
+              <td><input type="image" src="${shapshotUri}" name="${dev.name}" width="48" height="48" alt="${dev.name}"/></td>
+              <td><a href="http://${dev.ip}" target="_blank">${dev.host}</a></td>
+              <td><input type="text" id="node-name-${dev.idx}" value="${node.name}" style="width:100%"${node.device && ' readonly' || ''}></td>
+              <td>
+                <button type="button" id="add-node-${dev.idx}" ${node.device && 'hidden' || 'class="red-ui-button"'}>
+                  <i class="fa fa-plus"></i>
+                </button>
+              </td>
+            </tr>
+          `)
+        }
+        const mqttMap = this.project.getMqttMap() || {}
+        $('#device-table tbody').append(ilist.join(''))
+        for (const mac in dbDevices) {
+          const dev = dbDevices[mac]
+          $(`#add-node-${dev.idx}`).click(() => {
+            const name = $(`#node-name-${dev.idx}`).val()
+            const device = dev.ip && (dev.ip !== '?') && mqttMap[dev.ip] || ''
+            const devConfig = device && devConfigs[device]
+            const broker = devConfig?.mqtt_host && mqttBrockers[devConfig.mqtt_host] || ''
+            const config = { project: this.project, broker, device, name: dev.name }
+            this.project.addDevice(config)
+            $(`#add-node-${dev.idx}`).hide()
+            $(`#node-name-${dev.idx}`).attr('readonly','readonly')
+          })
+        }
+      }
+      fillDevices()
     }
   })
 </script>
