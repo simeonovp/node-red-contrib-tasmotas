@@ -215,7 +215,7 @@ module.exports = function (RED) {
 
         this._setStatus('configured')
       }
-      catch(err) {
+      catch (err) {
         this.status = 'unconfigured'
         this.error(err.stack || err)
       }
@@ -254,8 +254,12 @@ module.exports = function (RED) {
     async downloadIcons(all, force) {
       if (!this.devicesDb || !this.config.dbUri) return
       const iconsDir = path.join(this.resDir, 'icons')
-      if (fs.existsSync(this.iconsdir)) if (!force) return
-      else fs.mkdirSync(this.iconsdir, { recursive: true })
+      if (fs.existsSync(iconsDir)) {
+        if (!force) return
+      }
+      else {
+        fs.mkdirSync(iconsDir, { recursive: true })
+      }
       const devices = this.devicesDb.data?.devices
       if (!devices) return this.error('No devices table in DB')
       const hws = this.devicesDb.data?.hardware
@@ -359,7 +363,7 @@ module.exports = function (RED) {
           if (err) return
         }
       }
-      catch(err) {
+      catch (err) {
         this.error(err.stack || err)
       }
     

@@ -318,7 +318,9 @@ module.exports = function (RED) {
 
       // Deregister from BrokerNode when this node is deleted or restarted
       this.on('close', (done) => {
-        for (const item of this.swiches) item.onClose()
+        for (const item of this.swiches) {
+          if (item && typeof item.onClose === 'function') item.onClose()
+        }
         if (this.users) this._deregsterAtBroker(this)
         if (this.manager) this.manager.unregisterDevice(this)
         done()
