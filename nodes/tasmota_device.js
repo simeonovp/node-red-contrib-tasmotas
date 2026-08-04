@@ -103,14 +103,17 @@ module.exports = function (RED) {
 
       if (device.isOnline) {
         this.device.mqttCommand('POWER' +  this.channel)
-        startTimer()
+        this.startTimer()
       }
     }
 
     get channel() { return this.idx + 1 }
 
     onClose() {
-      if (this.timer) clearInterval(idx)
+      if (this.timer) {
+        clearInterval(this.timer)
+        this.timer = 0
+      }
     }
 
     onPower(topic, mqttPayloadBuf) {
@@ -154,7 +157,7 @@ module.exports = function (RED) {
         }
         else if (!this.debTimer) {
           this.debTimer = setTimeout(()=>{ 
-            clearTimeout[this.debTimer]
+            clearTimeout(this.debTimer)
             this.debTimer = null
             this.lastTime = Date.now()
             this.device.mqttCommand('POWER' +  this.channel, val && onValue || offValue)
@@ -180,7 +183,7 @@ module.exports = function (RED) {
 
     startTimer() {
       if (!this.supportPulseTime || !this.device.polling || (this.timeout === 0)) return
-      if (this.timer) this.clearInterval(this.timer)
+      if (this.timer) clearInterval(this.timer)
       this.timer = setInterval(()=>{ this.requestTimer() }, this.device.polling * 1000)
       this.requestTimer()
     }
@@ -315,7 +318,7 @@ module.exports = function (RED) {
 
       // Deregister from BrokerNode when this node is deleted or restarted
       this.on('close', (done) => {
-        for (const item in this.swiches) item.onClose()
+        for (const item of this.swiches) item.onClose()
         if (this.users) this._deregsterAtBroker(this)
         if (this.manager) this.manager.unregisterDevice(this)
         done()

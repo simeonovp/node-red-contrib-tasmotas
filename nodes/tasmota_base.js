@@ -46,9 +46,11 @@ class TasmotaBase {
 
     // Register ourself in the device node
     this.deviceNode = deviceNode
+    this._mqttEventHandler = this._onMqttEvent.bind(this)
+    this._deviceEventHandler = this._onDeviceEvent.bind(this)
     this.deviceNode.register(this)
-    this.deviceNode.addListener('mqtt', this._onMqttEvent.bind(this))
-    this.deviceNode.addListener(this.type + (this.config.idx || ''), this._onDeviceEvent.bind(this))
+    this.deviceNode.addListener('mqtt', this._mqttEventHandler)
+    this.deviceNode.addListener(this.type + (this.config.idx || ''), this._deviceEventHandler)
 
     this.on('input', (msg, send, done) => {
       if (msg.topic === 'command') {
@@ -67,7 +69,8 @@ class TasmotaBase {
     // Deregister from DeviceNode when this node is deleted or restarted
     this.on('close', (done) => {
       this.closing = true
-      this.deviceNode.removeListener(this.type + (this.config.idx || ''), this._onDeviceEvent.bind(this))
+      this.deviceNode.removeListener('mqtt', this._mqttEventHandler)
+      this.deviceNode.removeListener(this.type + (this.config.idx || ''), this._deviceEventHandler)
       this.deregister(this)
       done()
     })

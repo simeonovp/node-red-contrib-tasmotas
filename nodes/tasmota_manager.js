@@ -42,14 +42,29 @@ module.exports = function (RED) {
       this.manifest.save(true)
     }
 
+    ensureData() {
+      if (!this.data || typeof this.data !== 'object' || Array.isArray(this.data)) {
+        this.data = {}
+      }
+      this.data.devices = Array.isArray(this.data.devices) ? this.data.devices : []
+      this.data.groups = Array.isArray(this.data.groups) ? this.data.groups : []
+      return this.data
+    }
+
     load() {
-      if (!this.config.path || !fs.existsSync(this.config.path)) return
-      const json = fs.readFileSync(this.config.path, 'utf8') || {}
-      this.data = JSONparse(json)
+      if (!this.config.path || !fs.existsSync(this.config.path)) {
+        this.data = {}
+        return
+      }
+      const json = fs.readFileSync(this.config.path, 'utf8') || '{}'
+      const parsed = JSONparse(json)
+      this.data = (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {}
+      this.ensureData()
     }
   
     save(overwrite) {
       if (!this.config.path) return
+      this.ensureData()
       if (overwrite || !fs.existsSync(this.config.path)) {
         const json = JSON.stringify(this.data, null, 2)
         fs.createWriteStream(this.config.path).write(json)
@@ -189,7 +204,7 @@ module.exports = function (RED) {
           this.grp = group.idx
         }
         else {
-          this.grp = groups.lentgh
+          this.grp = groups.length
           groups.push({ idx: this.grp, name: this.name })
           this.log(`DevicesDb add group ${this.name} with idx ${this.grp}`)
           this.devicesDb.save(true)
@@ -406,8 +421,10 @@ module.exports = function (RED) {
     }
 
     _addDbDevice(config) {
-      const db = this.dbDevices
-      db['devices'] = db['devices'] || []
+      const db = this.devicesDb?.data || {}
+      this.devicesDb.data = db
+      db['devices'] = Array.isArray(db['devices']) ? db['devices'] : []
+      db['groups'] = Array.isArray(db['groups']) ? db['groups'] : []
       const group = config.group && db['groups'].find(row => (row['name'] === config.group))
       db['devices'].push({
         fw: config.version || 1,
@@ -423,8 +440,9 @@ module.exports = function (RED) {
     findAP(bssid) {
       const ap = this.devicesDb && this.devicesDb.findTableRaw('devices', 'mac', bssid, true)
       if (ap) return ap
-      const db = this.dbDevices
-      db['devices'] = db['devices'] || []
+      const db = this.devicesDb?.data || {}
+      this.devicesDb.data = db
+      db['devices'] = Array.isArray(db['devices']) ? db['devices'] : []
       db['devices'].push({ mac: bssid })
       this.devicesDb.save(true)
     }
