@@ -102,3 +102,6 @@ dist
 
 # TernJS port file
 .tern-port
+
+# tasmota-manager runtime cache (downloaded device DB, configs, icons)
+/resources/

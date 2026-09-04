@@ -4,7 +4,6 @@ const fs = require('fs')
 const request = require('request')
 const spawn = require("child_process").spawn
 
-const socketio = require('socket.io')
 const events = require('events')
 
 module.exports = function (RED) {
