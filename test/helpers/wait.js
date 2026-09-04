@@ -10,7 +10,8 @@ function waitUntil (predicate, { timeout = 3000, interval = 20 } = {}) {
       let ok
       try {
         ok = predicate()
-      } catch (err) {
+      }
+      catch (err) {
         ok = false
       }
       if (ok) return resolve()

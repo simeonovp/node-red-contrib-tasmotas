@@ -3,13 +3,13 @@ module.exports = function (RED) {
   const TasmotaBase = require('./tasmota_base.js')
 
   const PULSETIME_DEFAULTS = {
-    idx: 0,
+    idx: 0
   }
 
   class TasmotaPulseTime extends TasmotaBase {
     constructor (config) {
       super(config, RED, PULSETIME_DEFAULTS)
-      this.switch = this.deviceNode.swiches[this.config.idx]
+      this.switch = this.deviceNode.switches[this.config.idx]
       if (this.switch) this.switch.supportPulseTime = true
     }
 
@@ -20,8 +20,8 @@ module.exports = function (RED) {
       this.switch.requestTimer(payload.toString())
     }
 
-    onSend(msg) {
-      switch(msg.topic) {
+    onSend (msg) {
+      switch (msg.topic) {
         case 'timeout':
           msg.payload = msg.timeout
           super.onSend(msg)

@@ -21,9 +21,9 @@
     "url": "git+https://github.com/simeonovp/node-red-contrib-tasmotas.git"
   },
   "scripts": {
-    "test": "standard && mocha \"test/**/*_spec.js\" --timeout 10000 --exit",
+    "test": "eslint . && mocha \"test/**/*_spec.js\" --timeout 10000 --exit",
     "test:unit": "mocha \"test/**/*_spec.js\" --timeout 10000 --exit",
-    "lint": "standard"
+    "lint": "eslint ."
   },
   "node-red": {
     "nodes": {
@@ -45,16 +45,17 @@
   },
   "dependencies": {
     "child_process": "^1.0.2",
+    "fs-extra": "10.0.0",
     "mqtt": "4.2.6",
-    "request": "^2.88.2",
-    "fs-extra": "10.0.0"
+    "request": "^2.88.2"
   },
   "devDependencies": {
-    "standard": "*",
+    "aedes": "^1.1.2",
+    "eslint": "^9.39.5",
     "mocha": "^12.0.0",
+    "neostandard": "^0.13.0",
     "node-red": "^5.0.6",
-    "node-red-node-test-helper": "^0.3.6",
-    "aedes": "^1.1.2"
+    "node-red-node-test-helper": "^0.3.6"
   },
   "files": [
     "package.json",
@@ -63,10 +64,5 @@
     "LICENSE",
     "img/*",
     "nodes/*"
-  ],
-  "standard": {
-    "env": [
-      "mocha"
-    ]
-  }
+  ]
 }

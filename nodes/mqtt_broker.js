@@ -31,16 +31,17 @@ module.exports = function (RED) {
         if (!this.client) return
         if (this.connected) {
           this.client.end(done)
-        } else {
+        }
+        else {
           this.client.end()
           done()
         }
       })
 
-      this._connect() //sip-- ???
+      this._connect()
     }
 
-    _connect() {
+    _connect () {
       const config = this.config
       // Non-clean sessions need a fixed ClientID
       let cleansession = config.cleansession
@@ -54,20 +55,24 @@ module.exports = function (RED) {
       if (config.broker.indexOf('://') > -1) {
         // if a full url is given then use untouched
         brokerurl = config.broker
-      } else {
+      }
+      else {
         // or construct the standard mqtt:// url
         if (config.usetls) {
           brokerurl = 'mqtts://'
-        } else {
+        }
+        else {
           brokerurl = 'mqtt://'
         }
         if (config.broker !== '') {
           if (net.isIPv6(config.broker)) {
             brokerurl = brokerurl + '[' + config.broker + ']:' + config.port
-          } else {
+          }
+          else {
             brokerurl = brokerurl + config.broker + ':' + config.port
           }
-        } else {
+        }
+        else {
           brokerurl = brokerurl + 'localhost:' + config.port
         }
       }
@@ -145,7 +150,8 @@ module.exports = function (RED) {
                 this.users[id].onBrokerOffline()
               }
             }
-          } else {
+          }
+          else {
             this.log('Connection failed to broker: ' + brokerurl)
           }
         })
@@ -154,14 +160,14 @@ module.exports = function (RED) {
         this.client.on('error', (err) => {
           this.error(err)
         })
-      } catch (err) {
+      }
+      catch (err) {
         this.error(err)
       }
     }
 
     /* Register a new TasmotaNode */
     register (deviceNode) {
-      //if (!Object.keys(this.users).length) this._connect()
       if (!this.client) this._connect()
       this.users[deviceNode.id] = deviceNode
     }
@@ -175,7 +181,7 @@ module.exports = function (RED) {
     subscribe (deviceNode, topic, qos, callback) {
       this.subscriptions[topic] = this.subscriptions[topic] || {}
       this.subscriptions[topic][deviceNode.id] = callback
-      this.client.subscribe(topic, { qos: qos })
+      this.client.subscribe(topic, { qos })
     }
 
     /* Publish a new msg over MQTT */

@@ -39,11 +39,11 @@ module.exports = function (RED) {
             action = value.Action
           }
         }
-      } 
-      /* Firmware < 9.1.0
-         stat/topic/BUTTON<X> = {"ACTION":"DOUBLE"}
-      */
+      }
       else if (lastTopic.startsWith('BUTTON')) {
+        /* Firmware < 9.1.0
+           stat/topic/BUTTON<X> = {"ACTION":"DOUBLE"}
+        */
         channel = this.extractChannelNum(lastTopic)
         action = payload.ACTION
       }

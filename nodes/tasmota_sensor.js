@@ -13,12 +13,12 @@ module.exports = function (RED) {
 
       // Subscribe to device telemetry changes  tele/<device>/SENSOR
       this.mqttSubscribeTele('SENSOR', (topic, payload) => {
-        //tasmota/sc_01/tele/SENSOR = {"Time":"2023-01-08T07:20:34","SonoffSC":{"Temperature":23.0,"Humidity":44.0,"DewPoint":10.1,"Light":10,"Noise":40,"AirQuality":90},"TempUnit":"C"}
+        // tasmota/sc_01/tele/SENSOR = {"Time":"2023-01-08T07:20:34","SonoffSC":{"Temperature":23.0,"Humidity":44.0,"DewPoint":10.1,"Light":10,"Noise":40,"AirQuality":90},"TempUnit":"C"}
         this.onSensorTelemetry(topic, payload)
       })
 
       this.mqttSubscribeTele('RESULT', (topic, payload) => {
-        //tasmota/sc_01/tele/SENSOR = {"Time":"2023-01-08T07:20:34","SonoffSC":{"Temperature":23.0,"Humidity":44.0,"DewPoint":10.1,"Light":10,"Noise":40,"AirQuality":90},"TempUnit":"C"}
+        // tasmota/sc_01/tele/SENSOR = {"Time":"2023-01-08T07:20:34","SonoffSC":{"Temperature":23.0,"Humidity":44.0,"DewPoint":10.1,"Light":10,"Noise":40,"AirQuality":90},"TempUnit":"C"}
         this.onSensorTelemetry(topic, payload)
       })
 
@@ -42,7 +42,7 @@ module.exports = function (RED) {
       const topic = this.config.outputTopic ? this.config.outputTopic : undefined
 
       if (!this.config.rules || !this.config.rules.length) {
-        this.onSend({ topic: topic, payload: tasmotaData })
+        this.onSend({ topic, payload: tasmotaData })
         return
       }
 
@@ -50,11 +50,12 @@ module.exports = function (RED) {
       for (let i = 0; i < this.config.rules.length; i++) {
         const rule = this.config.rules[i]
         if (!rule || rule === 'payload') {
-          messages.push({ topic: topic, payload: tasmotaData })
-        } else {
+          messages.push({ topic, payload: tasmotaData })
+        }
+        else {
           const expr = RED.util.prepareJSONataExpression(rule, this)
           const result = RED.util.evaluateJSONataExpression(expr, tasmotaData)
-          messages.push({ topic: topic, payload: result })
+          messages.push({ topic, payload: result })
         }
       }
       this.onSend(messages)
@@ -64,7 +65,7 @@ module.exports = function (RED) {
       try {
         const data = JSON.parse(payload.toString())
         this.sendToOutputs(data)
-      } 
+      }
       catch (err) {
         this.setNodeStatus('red', 'Error parsing JSON data from device')
         this.error(err, 'Error parsing JSON data from device')
@@ -75,7 +76,7 @@ module.exports = function (RED) {
       try {
         const data = JSON.parse(payload.toString())
         this.sendToOutputs(data.StatusSNS)
-      } 
+      }
       catch (err) {
         this.setNodeStatus('red', 'Error parsing JSON data from device')
         this.error(err, 'Error parsing JSON data from device')

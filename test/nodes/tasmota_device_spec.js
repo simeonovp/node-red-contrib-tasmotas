@@ -129,8 +129,8 @@ describe('tasmota-device node', function () {
     assert.ok(shutter.switch1, 'switch1 should be set')
     assert.ok(shutter.switch2, 'switch2 should be set')
     assert.notStrictEqual(shutter.switch1, shutter.switch2, 'switch1 and switch2 must be different Power instances')
-    assert.strictEqual(shutter.switch1, device.swiches[0])
-    assert.strictEqual(shutter.switch2, device.swiches[1])
+    assert.strictEqual(shutter.switch1, device.switches[0])
+    assert.strictEqual(shutter.switch2, device.switches[1])
   })
 
   it('deregisters a leaf and drops the broker registration when the last user leaves', async function () {

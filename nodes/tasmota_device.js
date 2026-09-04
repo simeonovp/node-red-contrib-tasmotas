@@ -1,10 +1,4 @@
-const { emit } = require('process')
-const path = require('path')
-const fs = require('fs')
-const request = require('request')
-const spawn = require("child_process").spawn
-
-const events = require('events')
+const { extractChannelNum } = require('./lib/utils')
 
 module.exports = function (RED) {
   'use strict'
@@ -35,18 +29,10 @@ module.exports = function (RED) {
   // values for the tasmota POWER command
   const onValue = 'ON'
   const offValue = 'OFF'
-  const toggleValue = 'TOGGLE'
 
   const ShutterPrefix = 'Shutter'
-  
-  // const DBG = console.log
 
-  function extractChannelNum (str) {
-    const numberRegexp = /\d+$/
-    return Number(str.match(numberRegexp) || 1)
-  }
-
-  function parseSeconds(val) {
+  function parseSeconds (val) {
     return (val > 110) ? (val - 100) : parseInt(val / 10)
   }
 
@@ -54,12 +40,12 @@ module.exports = function (RED) {
     constructor (device, idx) {
       this.device = device
       this.idx = idx
-      this.lastValue = false //cache
-      this.lastChangeTime = 0 //new Date()
-      this.timeout //PulseTime
+      this.lastValue = false // cache
+      this.lastChangeTime = 0 // new Date()
+      this.timeout = undefined // PulseTime
       this.timer = 0
       this.lastTime = 0
-      this.debTimer
+      this.debTimer = undefined
       this.supportPulseTime = false
 
       device.mqttSubscribeStat(device, 'POWER' + this.channel, (topic, mqttPayloadBuf) => this.onPower(topic, mqttPayloadBuf))
@@ -81,13 +67,13 @@ module.exports = function (RED) {
               const sec = parseSeconds(PulseTime.Set)
               if (this.timeout !== sec) {
                 this.timeout = sec
-                this.send({topic: 'timeout', timeout: sec})
+                this.send({ topic: 'timeout', timeout: sec })
               }
             }
             if (typeof PulseTime.Remaining === 'number') {
               const sec = parseSeconds(PulseTime.Remaining)
-              if(sec) this.send({topic: 'countdown', countdown: sec})
-              else if(this.timer) this.stopTimer()
+              if (sec) this.send({ topic: 'countdown', countdown: sec })
+              else if (this.timer) this.stopTimer()
             }
           }
         }
@@ -101,21 +87,21 @@ module.exports = function (RED) {
       })
 
       if (device.isOnline) {
-        this.device.mqttCommand('POWER' +  this.channel)
+        this.device.mqttCommand('POWER' + this.channel)
         this.startTimer()
       }
     }
 
-    get channel() { return this.idx + 1 }
+    get channel () { return this.idx + 1 }
 
-    onClose() {
+    onClose () {
       if (this.timer) {
         clearInterval(this.timer)
         this.timer = 0
       }
     }
 
-    onPower(topic, mqttPayloadBuf) {
+    onPower (topic, mqttPayloadBuf) {
       const mqttPayload = mqttPayloadBuf.toString()
       if (mqttPayload === onValue) this.lastValue = true
       else if (mqttPayload === offValue) this.lastValue = false
@@ -130,9 +116,9 @@ module.exports = function (RED) {
       this.send({ topic: 'switch' + this.channel })
     }
 
-    onPulseTime(topic, mqttPayloadBuf) {
+    onPulseTime (topic, mqttPayloadBuf) {
       const mqttPayload = mqttPayloadBuf.toString()
-      if (!mqttPayload) return //epmty  payload
+      if (!mqttPayload) return // epmty  payload
       const sec = parseSeconds(parseInt(mqttPayload))
       if (this.timeout !== sec) {
         this.timeout = sec
@@ -140,59 +126,59 @@ module.exports = function (RED) {
       this.send({ topic: 'timeout', timeout: sec })
     }
 
-    send(msg) { //TODO remove and implement inline
+    send (msg) { // TODO remove and implement inline
       this.device.emit('tasmota-switch' + (this.idx || ''), 'send', msg)
       this.device.emit('tasmota-pulsetime' + (this.idx || ''), 'send', msg)
     }
-    
-    setPower(val) {
+
+    setPower (val) {
       if (this.debounce) {
         try {
-        const timestamp = Date.now()
-        const diff = (timestamp - this.lastTime)
-        if (diff > this.debounce) {
-          this.lastTime = timestamp
-          this.device.mqttCommand('POWER' +  this.channel, val && onValue || offValue)
+          const timestamp = Date.now()
+          const diff = (timestamp - this.lastTime)
+          if (diff > this.debounce) {
+            this.lastTime = timestamp
+            this.device.mqttCommand('POWER' + this.channel, (val && onValue) || offValue)
+          }
+          else if (!this.debTimer) {
+            this.debTimer = setTimeout(() => {
+              clearTimeout(this.debTimer)
+              this.debTimer = null
+              this.lastTime = Date.now()
+              this.device.mqttCommand('POWER' + this.channel, (val && onValue) || offValue)
+            }, this.debounce - diff)
+          }
         }
-        else if (!this.debTimer) {
-          this.debTimer = setTimeout(()=>{ 
-            clearTimeout(this.debTimer)
-            this.debTimer = null
-            this.lastTime = Date.now()
-            this.device.mqttCommand('POWER' +  this.channel, val && onValue || offValue)
-          }, this.debounce - diff)
-        }
-        } 
-        catch(err) {
+        catch (err) {
           this.warn('Debounce exeption' + err)
         }
       }
-      else this.device.mqttCommand('POWER' +  this.channel, val && onValue || offValue)
+      else this.device.mqttCommand('POWER' + this.channel, (val && onValue) || offValue)
     }
 
-    requestTimer(timeout) {
+    requestTimer (timeout) {
       let value
       if (timeout) {
         const sec = parseInt(timeout)
         value = ((sec > 11) ? (sec + 100) : (sec * 10)).toString()
       }
 
-      this.device.mqttCommand('PulseTime' +  this.channel, value)
+      this.device.mqttCommand('PulseTime' + this.channel, value)
     }
 
-    startTimer() {
+    startTimer () {
       if (!this.supportPulseTime || !this.device.polling || (this.timeout === 0)) return
       if (this.timer) clearInterval(this.timer)
-      this.timer = setInterval(()=>{ this.requestTimer() }, this.device.polling * 1000)
+      this.timer = setInterval(() => { this.requestTimer() }, this.device.polling * 1000)
       this.requestTimer()
     }
 
-    stopTimer() {
+    stopTimer () {
       if (this.timer) {
         clearInterval(this.timer)
         this.timer = 0
       }
-      this.send({topic: 'countdown', countdown: 0})
+      this.send({ topic: 'countdown', countdown: 0 })
     }
   }
 
@@ -207,37 +193,37 @@ module.exports = function (RED) {
       }
 
       const idx1 = idx * 2
-      this.switch1 = device.swiches[idx1] || new Power(device, idx1)
-      device.swiches[idx1] = this.switch1
+      this.switch1 = device.switches[idx1] || new Power(device, idx1)
+      device.switches[idx1] = this.switch1
       const idx2 = idx1 + 1
-      this.switch1 = device.swiches[idx2] || new Power(device, idx2)
-      device.swiches[idx2] = this.switch1
+      this.switch1 = device.switches[idx2] || new Power(device, idx2)
+      device.switches[idx2] = this.switch1
 
-      //tasmota/t1_02/tele/SENSOR = {"Time":"2022-12-26T09:07:46","Shutter1":{"Position":100,"Direction":0,"Target":100}}
+      // tasmota/t1_02/tele/SENSOR = {"Time":"2022-12-26T09:07:46","Shutter1":{"Position":100,"Direction":0,"Target":100}}
       device.mqttSubscribeTele(device, 'SENSOR', this.onMqttState.bind(this))
-      //tasmota/t1_02/stat/RESULT = {"Shutter1":{"Position":98,"Direction":-1,"Target":-151}}
+      // tasmota/t1_02/stat/RESULT = {"Shutter1":{"Position":98,"Direction":-1,"Target":-151}}
       device.mqttSubscribeStat(device, 'RESULT', this.onMqttState.bind(this))
       if (device.isOnline) this.requestPosition()
     }
 
-    get channel() { return this.idx + 1 }
+    get channel () { return this.idx + 1 }
 
-    send(msg) {
+    send (msg) {
       this.device.emit('tasmota-shutter' + (this.idx || ''), 'send', msg)
     }
 
-    command(cmd, val) {
+    command (cmd, val) {
       this.device.mqttCommand(ShutterPrefix + cmd + this.channel, val)
     }
 
-    requestPosition() {
+    requestPosition () {
       if (isNaN(this.data.Position)) {
         this.data.Position = 0
         this.command('ShutterPosition')
       }
     }
 
-    onMqttState(topic, mqttPayloadBuf) {
+    onMqttState (topic, mqttPayloadBuf) {
       const mqttPayload = mqttPayloadBuf.toString()
       const payloadData = JSON.parse(mqttPayload)
 
@@ -258,7 +244,7 @@ module.exports = function (RED) {
     }
   }
 
-  //SonoffSC: {"Temperature":24,"Humidity":43,"DewPoint":10.6,"Light":10,"Noise":40,"AirQuality":90}
+  // SonoffSC: {"Temperature":24,"Humidity":43,"DewPoint":10.6,"Light":10,"Noise":40,"AirQuality":90}
 
   class TasmotaDevice {
     constructor (config) {
@@ -283,21 +269,20 @@ module.exports = function (RED) {
 
       for (const key in defaults) {
         if (config[key] !== undefined && config[key] !== '') {
-          if ((typeof defaults[key] == 'number') && (typeof config[key] === 'string')) {
+          if ((typeof defaults[key] === 'number') && (typeof config[key] === 'string')) {
             this.config[key] = parseInt(config[key])
           }
           else this.config[key] = config[key]
-        } else {
+        }
+        else {
           this.config[key] = defaults[key]
         }
       }
       this.config.name = this.config.name || this.config.device
 
       this.cache = {}
-      //switches
-      this.swichUsers
-      this.swiches = [] //type Power
-      this.shutters = [] //type Shutter
+      this.switches = [] // type Power
+      this.shutters = [] // type Shutter
       this.sendDevice = config.sendDevice || false
       this.debounce = 0
 
@@ -312,12 +297,12 @@ module.exports = function (RED) {
       }
       // Register ourself in the broker node
       this.brokerNode = brokerNode
-     
-      //this._regsterAtBroker()
+
+      // this._regsterAtBroker()
 
       // Deregister from BrokerNode when this node is deleted or restarted
       this.on('close', (done) => {
-        for (const item of this.swiches) {
+        for (const item of this.switches) {
           if (item && typeof item.onClose === 'function') item.onClose()
         }
         if (this.users) this._deregsterAtBroker(this)
@@ -326,8 +311,8 @@ module.exports = function (RED) {
       })
     }
 
-    async downloadConfig(force = false) {
-      //.node-red\projects\node-red-contrib-tasmotas\resources\<project>\configs
+    async downloadConfig (force = false) {
+      // .node-red\projects\node-red-contrib-tasmotas\resources\<project>\configs
       if (!this.manager || !this.config.ip) return
       try {
         this.deviceConfig = await this.manager.downloadConfig(this.config.ip, force)
@@ -338,17 +323,17 @@ module.exports = function (RED) {
           if (!this.deviceConfig) return
         }
       }
-      catch(err) {
+      catch (err) {
         this.error(err)
       }
       this.mqttCommand('STATUS', '11')
     }
 
-    _onMqttStatus(command, payload) {
+    _onMqttStatus (command, payload) {
       switch (command) {
         case 'STATUS': {
           const data = payload && JSON.parse(payload)
-          if (data?.Status?.Topic !== this.config.device) this.warn('MQTT reports different topic "${data?.Status?.Topic}", expected "${this.config.device}"')
+          if (data?.Status?.Topic !== this.config.device) this.warn(`MQTT reports different topic "${data?.Status?.Topic}", expected "${this.config.device}"`)
           break
         }
         case 'STATUS5': {
@@ -377,7 +362,7 @@ module.exports = function (RED) {
       }
     }
 
-    _regsterAtBroker() {
+    _regsterAtBroker () {
       this.brokerNode.register(this)
       this.isOnline = false
 
@@ -386,13 +371,14 @@ module.exports = function (RED) {
         this.isOnline = (payload.toString().startsWith('Online'))
         if (this.isOnline) {
           this.onDeviceOnline()
-        } else {
+        }
+        else {
           this.onDeviceOffline()
         }
       })
     }
 
-    _deregsterAtBroker() {
+    _deregsterAtBroker () {
       this.brokerNode.deregister(this)
       this.isOnline = false
     }
@@ -401,14 +387,14 @@ module.exports = function (RED) {
     register (tasmotaNode) {
       if (!this.cache[tasmotaNode.type]) this.cache[tasmotaNode.type] = {}
 
-      //increment users
+      // increment users
       if (!this.users) this._regsterAtBroker()
       this.users++
 
       if ((tasmotaNode.type === 'tasmota-switch') || (tasmotaNode.type === 'tasmota-pulsetime')) {
         const idx = tasmotaNode.config.idx || 0
         // create power object on demand
-        this.swiches[idx] = this.swiches[idx] || new Power(this, idx)
+        this.switches[idx] = this.switches[idx] || new Power(this, idx)
       }
       if (tasmotaNode.type === 'tasmota-shutter') {
         const idx = tasmotaNode.config.idx || 0
@@ -416,8 +402,8 @@ module.exports = function (RED) {
         this.shutters[idx] = this.shutters[idx] || new Shutter(this, idx)
       }
 
-      //set cached LWT
-      //-- if (this.isOnline) tasmotaNode.onDeviceOnline()
+      // set cached LWT
+      // -- if (this.isOnline) tasmotaNode.onDeviceOnline()
     }
 
     /* DeRegister a previously registered TasmotaNode */
@@ -435,12 +421,13 @@ module.exports = function (RED) {
       if (this.subGroups) {
         const fullTopic = (this.config.fullTopic
           .replace('%topic%', this.config.device)
-          .replace('%prefix%', '+') 
-          + (this.config.fullTopic.endsWith('/') ? '+' : '/+'))
-            .replace('+/+', '#')
-        //single device subscribtion
-        this.brokerNode.subscribe(this, fullTopic, this.config.qos, (topic, payload, packet) => { 
-          this._onMqttMessage(topic, payload, packet) })
+          .replace('%prefix%', '+') +
+          (this.config.fullTopic.endsWith('/') ? '+' : '/+'))
+          .replace('+/+', '#')
+        // single device subscribtion
+        this.brokerNode.subscribe(this, fullTopic, this.config.qos, (topic, payload, packet) => {
+          this._onMqttMessage(topic, payload, packet)
+        })
       }
 
       this.emit('mqtt', 'BrokerOnline')
@@ -460,7 +447,7 @@ module.exports = function (RED) {
       this.emit('mqtt', 'DeviceOffline')
     }
 
-    _onMqttMessage(topic, payload, packet) {
+    _onMqttMessage (topic, payload, packet) {
       if (this.subGroups.stat && topic.startsWith(this.subGroups.stat.topic)) {
         const command = topic.substr(this.subGroups.stat.topic.length)
         if (command.startsWith('STATUS')) this._onMqttStatus(command, payload)
@@ -472,7 +459,7 @@ module.exports = function (RED) {
       }
       else if (this.subGroups.tele && topic.startsWith(this.subGroups.tele.topic)) {
         const command = topic.substr(this.subGroups.tele.topic.length)
-        
+
         if (this.manager) {
           const json = payload.toString()
           const data = (json.charAt(0) === '{') && JSON.parse(json)
@@ -484,16 +471,16 @@ module.exports = function (RED) {
         this._fireMqttMessage(topic, payload, packet, command, this.subGroups.tele.subscriptions)
       }
       else {
-        //regiter tele subGroup on demand
+        // regiter tele subGroup on demand
         if (!this.subGroups.cmnd && topic.includes(this.config.cmndPrefix)) return this.mqttSubscribeCmnd(this, 'STATUS')
         if (!this.subGroups.tele && topic.includes(this.config.telePrefix)) return this.mqttSubscribeTete(this)
-        if (topic.includes(this.config.telePrefix) || topic.includes(this.config.cmndPrefix)
-          || topic.includes('STATUS') || topic.includes('RESULT')) return
+        if (topic.includes(this.config.telePrefix) || topic.includes(this.config.cmndPrefix) ||
+          topic.includes('STATUS') || topic.includes('RESULT')) return
         this.warn(`_onMqttMessage topic:${topic}, subGroups:${JSON.stringify(this.subGroups)}`)
       }
     }
 
-    _fireMqttMessage(topic, payload, packet, command, subscriptions) {
+    _fireMqttMessage (topic, payload, packet, command, subscriptions) {
       if (Object.prototype.hasOwnProperty.call(subscriptions, command)) {
         for (const ref in subscriptions[command]) {
           if (Object.prototype.hasOwnProperty.call(subscriptions[command], ref)) {
@@ -515,31 +502,34 @@ module.exports = function (RED) {
       }
     }
 
-    buildFullTopic(prefix, command) {
+    buildFullTopic (prefix, command) {
       let full = this.config.fullTopic
 
       full = full.replace('%topic%', this.config.device)
 
       if (prefix === 'tele') {
         full = full.replace('%prefix%', this.config.telePrefix)
-      } else if (prefix === 'cmnd') {
+      }
+      else if (prefix === 'cmnd') {
         full = full.replace('%prefix%', this.config.cmndPrefix)
-      } else if (prefix === 'stat') {
+      }
+      else if (prefix === 'stat') {
         full = full.replace('%prefix%', this.config.statPrefix)
       }
 
       if (full.endsWith('/')) {
         return full + command
-      } else {
+      }
+      else {
         return full + '/' + command
       }
     }
 
-    mqttCommand(command, payload) {
+    mqttCommand (command, payload) {
       this._MQTTPublish('cmnd', command, payload)
     }
 
-    _MQTTPublish(prefix, command, payload) {
+    _MQTTPublish (prefix, command, payload) {
       const fullTopic = this.buildFullTopic(prefix, command)
       const options = {
         qos: this.config.qos,
@@ -548,26 +538,26 @@ module.exports = function (RED) {
       this.brokerNode.publish(fullTopic, payload, options)
     }
 
-    mqttSubscribeCmnd(tasmotaNode, command, callback) {
+    mqttSubscribeCmnd (tasmotaNode, command, callback) {
       this._MQTTSubscribe(tasmotaNode, 'cmnd', command, callback)
     }
 
-    mqttSubscribeStat(tasmotaNode, command, callback) {
+    mqttSubscribeStat (tasmotaNode, command, callback) {
       this._MQTTSubscribe(tasmotaNode, 'stat', command, callback)
     }
 
-    mqttSubscribeTele(tasmotaNode, command, callback) {
+    mqttSubscribeTele (tasmotaNode, command, callback) {
       this._MQTTSubscribe(tasmotaNode, 'tele', command, callback)
     }
 
-    _MQTTSubscribe(tasmotaNode, prefix, command, callback) {
+    _MQTTSubscribe (tasmotaNode, prefix, command, callback) {
       this.subGroups = this.subGroups || {}
-     
+
       const topic = this.buildFullTopic(prefix, '')
       this.subGroups[prefix] = this.subGroups[prefix] || { topic, subscriptions: {} }
       if (!command || !callback) return
-    
-      let subscriptions = this.subGroups[prefix].subscriptions
+
+      const subscriptions = this.subGroups[prefix].subscriptions
       subscriptions[command] = subscriptions[command] || {}
 
       let callbacks = subscriptions[command][tasmotaNode.id]

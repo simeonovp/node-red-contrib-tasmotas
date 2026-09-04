@@ -2,9 +2,6 @@ module.exports = function (RED) {
   'use strict'
   const TasmotaBase = require('./tasmota_base.js')
 
-  const D_CMND_SHUTTER_UP = 'Up'
-  const D_CMND_SHUTTER_DOWN = 'Down'
-
   const SHUTTER_DEFAULTS = {
     idx: 0,
     swapSwitches: false
@@ -63,12 +60,12 @@ module.exports = function (RED) {
         switch (payload) {
           case 'Open':
             if (this.config.swapSwitches) payload = 'Close'
-            break;
+            break
           case 'Close':
             if (this.config.swapSwitches) payload = 'Open'
-            break;
+            break
           case 'Stop':
-            break;
+            break
           default:
             this.warn('Invalid payload received on input' + JSON.stringify(msg))
             return
@@ -81,9 +78,9 @@ module.exports = function (RED) {
       this.shutter.command(payload)
     }
 
-    onSend(msg) {
+    onSend (msg) {
       msg.payload = this.shutter.data.Position
-      switch(msg.topic) {
+      switch (msg.topic) {
         case 'position':
           // update status icon and label
           if (this.shutter.position === 100) this.setNodeStatus('green', (this.config.swapSwitches) ? 'Open' : 'Closed')
@@ -94,14 +91,14 @@ module.exports = function (RED) {
       super.onSend(msg)
     }
 
-    _onMqttEvent(ev) {
+    _onMqttEvent (ev) {
       super._onMqttEvent(ev)
-      switch(ev) {
+      switch (ev) {
         case 'DeviceOnline':
           this.shutter.requestPosition()
-          break;
+          break
         case 'DeviceOffline':
-          break;
+          break
       }
     }
   }

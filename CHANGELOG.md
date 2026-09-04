@@ -13,34 +13,39 @@ Bugs:
  - tasmota_rf_manager.js + tasmota_rf_device.js: addListener(code, fn.bind(this)) / removeListener(code, fn.bind(this)) use a new bound function each time, so removeListener never actually removes the original listener -> listener leak on node close/redeploy
  - [FIXED 2026-09-04] tasmota_manager.js / tasmota_device.js: required `socket.io`, which is not listed in package.json and was not resolvable at all (confirmed, not just a risk) -> `Cannot find module 'socket.io'` on every attempt to load the tasmota-device or tasmota-manager node, in this session's dev install and presumably for any real user too. `io`/`socketio` was never actually used anywhere in either file, so the dead `require('socket.io')` line was removed from both (no behavior change) so the test suite below could even load these modules.
  - tasmota_manager.js: _spawnDecodeConfig() spawns 'python' with no 'error' handler and no check whether python/python3 is installed -> unhandled error event / unclear failure for users
- - mqtt_broker.js: leftover debug comment "//sip-- ???" and dead commented-out code in register()
+ - [FIXED 2026-09-04] mqtt_broker.js: leftover debug comment "// sip-- ???" and dead commented-out code in register() - both removed (no behavior change)
 
 Dependencies (outdated / risky):
  - "child_process": "^1.0.2" listed as an npm dependency, but child_process is a Node core module - this pulls in an unnecessary/confusing package, should just be removed
  - "request" is deprecated since 2020 (no more updates, known vulnerable transitive deps like tough-cookie) - migrate to native fetch (Node >=18) or undici
  - "mqtt": "4.2.6" pinned to an old major version (5.x available) - review breaking changes and update
  - "fs-extra": "10.0.0" pinned old, no reason not to allow newer versions
- - socket.io used in code but missing from package.json entirely (see bug above)
+ - [RESOLVED 2026-09-04] socket.io was required but missing from package.json entirely - resolved by removing the dead require (see bug above), not by adding the dependency
  - no "engines" field to declare minimum supported Node.js / Node-RED version, even though the code relies on modern syntax (optional chaining, nullish-ish patterns)
 
 Code quality / maintainability:
- - consistent typo "swiches" instead of "switches" throughout tasmota_device.js/tasmota_manager.js (this.swiches, device.swiches) - purely cosmetic but hurts readability
- - "timimgs" typo (should be "timings") used consistently in tasmota_rf_manager.js
- - duplicate extractChannelNum() implementation in both tasmota_base.js (class method) and tasmota_manager.js (module function)
- - tasmota_device.js: unused imports/vars `emit`, `path`, `fs`, `request`, `spawn`, `socketio`, `events`, `toggleValue` (confirmed by `npx standard`)
- - tasmota_config.js: `TasmotaBase` is required but never used
- - "test": "standard" in package.json only runs the linter, no unit tests exist - the `ct` bug above is exactly the kind of regression unit tests would catch
- - httpCommand()/mqttCommand() build URLs/payloads via plain string concatenation without encodeURIComponent - can break on special characters in commands/params
- - mix of callback-style done()/send() and async/await/Promises across nodes (tasmota_config.js, tasmota_manager.js) - inconsistent error propagation (some catch blocks swallow err instead of calling done(err))
- - `npx standard` currently reports a large number of style violations (missing spaces before function parens, indentation, `==` instead of `===`, extra semicolons, mixed `&&`/`||` without parentheses, etc.) across almost every file - most are auto-fixable with `standard --fix`, worth doing once before further development to get a clean baseline
+ - [FIXED 2026-09-04] consistent typo "swiches" instead of "switches" throughout tasmota_device.js/tasmota_switch.js/tasmota_pulsetime.js (this.swiches, device.swiches) - renamed to `switches` everywhere (nodes + tests)
+ - [FIXED 2026-09-04] "timimgs" typo (should be "timings") used consistently in tasmota_rf_manager.js - renamed
+ - [FIXED 2026-09-04] duplicate extractChannelNum() implementation in tasmota_base.js (class method) and tasmota_device.js (module function - not tasmota_manager.js as originally noted here, corrected) - both now delegate to a single implementation in the new nodes/lib/utils.js
+ - [FIXED 2026-09-04] tasmota_device.js: removed unused imports/vars `emit`, `path`, `fs`, `request`, `spawn`, `socketio`, `events`, `toggleValue`; tasmota_manager.js: removed unused `emit`; tasmota_rf_manager.js: removed unused `path`, `fs`; tasmota_shutter.js: removed unused `D_CMND_SHUTTER_UP/DOWN`, `ShutterPrefix`, `ShutterCommands`
+ - [FIXED 2026-09-04] tasmota_config.js: unused `TasmotaBase` require removed
+ - [FIXED 2026-09-04] httpCommand() now builds its URL via `encodeURIComponent()` instead of raw string concatenation
+ - [FIXED 2026-09-04, then reverted 2026-09-04] first ran `standard --fix` (no-mixed-operators parens, camelCase locals for the snake_case `ip_address`/`mqtt_topic` fields read from decode-config.py's JSON output, a couple of dead no-op property statements, a rewrite of the comma-operator object-building idiom in tasmota_manager.js's list*() methods into plain object literals, and 1tbs brace style). The 1tbs part (`} else {` / `} catch {` on one line) turned out to violate the project's actual style - the user's `else`/`catch`/`finally` always start on a new line - so all 83 of those were reverted back via a scripted codemod. Everything else from that pass stayed. See feedback memory `brace-style-else-catch-finally-newline`.
+ - [FIXED 2026-09-04] `standard` cannot be configured to accept else/catch/finally-on-new-line (it's zero-config by design), so it was replaced entirely: `standard` uninstalled, devDependencies now `eslint` + `neostandard` (the flat-config ESLint-9+ successor to `eslint-config-standard`), config in the new `eslint.config.js` with `'@stylistic/brace-style': ['error', 'stroustrup', { allowSingleLine: true }]` overriding neostandard's default 1tbs. `"lint"`/`"test"` scripts now call `eslint .`. Also fixed 2 leftover 1tbs spots in test/ (test/helpers/wait.js, test/nodes/tasmota_rf_device_spec.js) that predated this switch. `npx eslint .` now passes cleanly except for the two lines that are the still-open tasmota_light.js bugs below - expected, not a config problem.
+ - still open: mix of callback-style done()/send() and async/await/Promises across nodes (tasmota_config.js, tasmota_manager.js) - inconsistent error propagation (some catch blocks swallow err instead of calling done(err)). Left for the behavioral-fix pass since resolving it means deciding a consistent error-handling pattern per call site, not a mechanical change.
 -------------------
 Test infrastructure + new bugs found while building it (2026-09-04)
 -------------------
 Added a regression test suite under test/ (mocha + node-red-node-test-helper
 + an embedded aedes MQTT broker, see test/helpers/) covering all 14 node
 types, run via `npm run test:unit` (or `npm test`, which additionally gates
-on `standard` and will currently fail on the pre-existing lint findings
-above - `npm run test:unit` is the one to use until those are cleaned up).
+on `eslint` - see the eslint/neostandard switch above). `nodes/` and `test/`
+are lint-clean except for exactly the two lines that *are* the known
+tasmota_light.js `ct`/object-payload bugs - so `npm test` currently stops at
+the `eslint` step (its `&&` never reaches mocha) precisely because those
+two bugs are still open; `npm run test:unit` always runs the test suite
+regardless. Once those two bugs are fixed for real, `npm test` will pass
+lint and run the full suite in one go.
 8 of the ~48 tests currently FAIL ON PURPOSE: they encode the known bugs
 above plus the ones found below, so each bug fix can be verified by watching
 its test turn green - do not "fix" a red test by changing the assertion,

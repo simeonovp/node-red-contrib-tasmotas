@@ -4,15 +4,15 @@ module.exports = function (RED) {
 
   const SWITCH_DEFAULTS = {
     idx: 0,
-    supportPulseTime: false, //#2--
+    supportPulseTime: false, // #2--
     supportChangeTime: false
   }
 
   class TasmotaSwitch extends TasmotaBase {
     constructor (config) {
       super(config, RED, SWITCH_DEFAULTS)
-      this.switch = this.deviceNode.swiches[this.config.idx]
-      //#2---
+      this.switch = this.deviceNode.switches[this.config.idx]
+      // #2---
       if (this.config.supportPulseTime) {
         this.warn('Parameter SupportPulseTime is deprecated. Use PulseTime node instead')
       }
@@ -23,7 +23,7 @@ module.exports = function (RED) {
 
       let payload = msg.payload
       const topic = (msg.topic || '').toLowerCase()
-      //#2---
+      // #2---
       if (topic.startsWith('timeout')) return
 
       if (typeof payload !== 'boolean') {
@@ -56,21 +56,21 @@ module.exports = function (RED) {
           return
         }
       }
-      
+
       if (payload !== this.switch.lastValue) this.switch.setPower(payload)
     }
 
-    onSend(msg) {
+    onSend (msg) {
       msg.payload = this.switch.lastValue
       if (this.config.supportChangeTime) msg.time = this.switch.lastChangeTime.toLocaleString()
       if (msg.topic.startsWith('switch')) {
         // update status icon and label
         if (this.switch.lastValue) this.setNodeStatus('green', 'On')
-        else  this.setNodeStatus('grey', 'Off')
+        else this.setNodeStatus('grey', 'Off')
         super.onSend(msg)
       }
       else {
-        if (this.config.supportPulseTime) super.onSend(msg) //#2--
+        if (this.config.supportPulseTime) super.onSend(msg) // #2--
       }
     }
   }

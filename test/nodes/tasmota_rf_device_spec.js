@@ -76,7 +76,8 @@ describe('tasmota-rf-device node', function () {
     let threw = false
     try {
       await helper.load([fakeRfManagerModule, rfDeviceNodeModule], flow)
-    } catch (err) {
+    }
+    catch (err) {
       threw = true
     }
     // Node-RED's runtime catches constructor exceptions per-node rather than

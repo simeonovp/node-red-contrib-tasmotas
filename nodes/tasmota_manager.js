@@ -1,17 +1,16 @@
-const { emit } = require('process')
 const path = require('path')
 const fs = require('fs')
 const fsx = require('fs-extra')
 const request = require('request')
-const spawn = require("child_process").spawn
+const spawn = require('child_process').spawn
 
 const events = require('events')
 
-function JSONparse(json) {
+function JSONparse (json) {
   try {
     return JSON.parse(json)
   }
-  catch(err) {
+  catch (err) {
     console.error(`Error JSON.parse(${json}):${err}`)
   }
 }
@@ -20,16 +19,16 @@ module.exports = function (RED) {
   'use strict'
 
   class DbBase {
-    constructor(config, manifest) {
+    constructor (config, manifest) {
       this.config = config || {}
       this.data = undefined
       this.manifest = manifest
-  
+
       this.downloadPending = false
       this.load()
     }
 
-    updateManifest(key, json) {
+    updateManifest (key, json) {
       if (!this.manifest) return
       this.manifest.data = this.manifest.data || {}
       const fileManifest = this.manifest.data[key] || {}
@@ -41,7 +40,7 @@ module.exports = function (RED) {
       this.manifest.save(true)
     }
 
-    ensureData() {
+    ensureData () {
       if (!this.data || typeof this.data !== 'object' || Array.isArray(this.data)) {
         this.data = {}
       }
@@ -50,7 +49,7 @@ module.exports = function (RED) {
       return this.data
     }
 
-    load() {
+    load () {
       if (!this.config.path || !fs.existsSync(this.config.path)) {
         this.data = {}
         return
@@ -60,8 +59,8 @@ module.exports = function (RED) {
       this.data = (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {}
       this.ensureData()
     }
-  
-    save(overwrite) {
+
+    save (overwrite) {
       if (!this.config.path) return
       this.ensureData()
       if (overwrite || !fs.existsSync(this.config.path)) {
@@ -70,8 +69,8 @@ module.exports = function (RED) {
         this.updateManifest(this.config.path, json)
       }
     }
-  
-    download(skipIfSame = false) {
+
+    download (skipIfSame = false) {
       const url = this.config.url
       if (!url) return
       if (this.downloadPending) return
@@ -80,15 +79,15 @@ module.exports = function (RED) {
         request(url, { json: true }, (err, resp, data) => {
           if (err || (resp && resp.statusCode >= 400) || !data) {
             console.warn('Failed to get ' + url)
-            reject (err ? err : resp.statusCode)
+            reject(err || resp.statusCode)
             this.downloadPending = false
             return
           }
-          
+
           const json = JSON.stringify(data, null, 2)
           const manifest = this.manifest?.data
-          const length = manifest && manifest[url]?.length || 0
-          const hash = manifest && manifest[url]?.hash || 0
+          const length = (manifest && manifest[url]?.length) || 0
+          const hash = (manifest && manifest[url]?.hash) || 0
           if (skipIfSame && length && json.length && (length === json.length) && (hash === this.hashCode(json))) {
             resolve()
             this.downloadPending = false
@@ -102,23 +101,22 @@ module.exports = function (RED) {
         })
       })
     }
-    
-    hashCode(string) {
+
+    hashCode (string) {
       let hash = 0
       for (let i = 0; i < string.length; i++) {
-        let code = string.charCodeAt(i)
+        const code = string.charCodeAt(i)
         hash = ((hash << 5) - hash) + code
         hash = hash & hash // Convert to 32bit integer
       }
       return hash
     }
 
-
-    getTable(table) {
+    getTable (table) {
       return this.data && this.data[table]
     }
-  
-    findTableRaw(table, col, val, ignorecase = false) {
+
+    findTableRaw (table, col, val, ignorecase = false) {
       const arr = this.getTable(table)
       if (ignorecase) {
         val = val.toUpperCase()
@@ -126,12 +124,11 @@ module.exports = function (RED) {
       }
       return arr && arr.find(row => (row[col] === val))
     }
-  
-    getTableRawIndex(table, col, val) {
+
+    getTableRawIndex (table, col, val) {
       const arr = this.getTable(table)
       return arr && arr.findIndex(row => (row[col] === val))
     }
-  
   }
 
   class TasmotaManager {
@@ -144,20 +141,20 @@ module.exports = function (RED) {
       this.resDir = path.resolve(path.join(__dirname, '../resources', config.name))
       this.manifestDb = new DbBase({ path: path.join(this.resDir, 'manifest.json') })
 
-      this.devicesDb = new DbBase({ 
-        path: path.join(this.resDir, 'devices.json'), 
-        url: this.config.dbUri && (this.config.dbUri + 'devices.json') 
+      this.devicesDb = new DbBase({
+        path: path.join(this.resDir, 'devices.json'),
+        url: this.config.dbUri && (this.config.dbUri + 'devices.json')
       }, this.manifestDb)
       this.grp = 0
 
-      this.networkDb = new DbBase({ 
-        path: path.join(this.resDir, 'network.json'), 
-        url: this.config.dbUri && (this.config.dbUri + 'network.json') 
+      this.networkDb = new DbBase({
+        path: path.join(this.resDir, 'network.json'),
+        url: this.config.dbUri && (this.config.dbUri + 'network.json')
       }, this.manifestDb)
 
-      this.rf433Db = new DbBase({ 
-        path: path.join(this.resDir, 'rf433codes.json'), 
-        url: this.config.dbUri && (this.config.dbUri + 'rf433codes.json') 
+      this.rf433Db = new DbBase({
+        path: path.join(this.resDir, 'rf433codes.json'),
+        url: this.config.dbUri && (this.config.dbUri + 'rf433codes.json')
       }, this.manifestDb)
       this.rf433DbDirty = false
 
@@ -169,27 +166,26 @@ module.exports = function (RED) {
       this.hosts = {}
 
       this.mqttMapPath = path.resolve(path.join(this.confdir, '..', 'mqtt_map.json'))
-      this.mqttMap
-      this.io
+      this.mqttMap = undefined
       this.ev = new events.EventEmitter()
       this.ev.setMaxListeners(0)
 
-      this.on('close', (done)=>{
+      this.on('close', (done) => {
         if (this.rf433DbDirty) this.rf433Db.save(true)
         done()
       })
 
       this.initialize(true)
-      
+
       if (!fs.existsSync(this.mqttMapPath)) this.downloadAllConfigs()
       else this.loadMqttMap()
     }
 
-    get dbDevices() {  return this.devicesDb.data }
-    get network() {  return this.networkDb.data }
- 
-    async initialize(overwrite = false) {
-      //download:
+    get dbDevices () { return this.devicesDb.data }
+    get network () { return this.networkDb.data }
+
+    async initialize (overwrite = false) {
+      // download:
       if (!this.config.dbUri) return
       if (!overwrite && (this.status === 'configured')) return
       if (this.status === 'initializing') return
@@ -197,8 +193,8 @@ module.exports = function (RED) {
       try {
         if (this.devicesDb && await this.devicesDb.download(true)) this.devicesDb.save(overwrite)
         if (this.networkDb && await this.networkDb.download(true)) this.networkDb.save(overwrite)
-        const groups = this.devicesDb && this.devicesDb.getTable('groups') || [{ idx: 0, name: '?' }]
-        const group = groups.find(row => (row['name'] === this.name))
+        const groups = (this.devicesDb && this.devicesDb.getTable('groups')) || [{ idx: 0, name: '?' }]
+        const group = groups.find(row => (row.name === this.name))
         if (group) {
           this.grp = group.idx
         }
@@ -220,13 +216,13 @@ module.exports = function (RED) {
       }
     }
 
-    _setStatus(status) {
+    _setStatus (status) {
       this.status = status
       // Pass the new status to all listeners
-      //?? this.emit('devdb_status', status)
+      // ?? this.emit('devdb_status', status)
     }
 
-    async _downloadDecodeConfig() {
+    async _downloadDecodeConfig () {
       const localPath = this.confdir + '/decode-config.py'
 
       if (fs.existsSync(localPath)) return
@@ -241,7 +237,7 @@ module.exports = function (RED) {
       }
     }
 
-    _spawnDecodeConfig(params) {
+    _spawnDecodeConfig (params) {
       return new Promise((resolve, reject) => {
         const pythonProcess = spawn('python', [this.confdir + '/decode-config.py', ...params])
         pythonProcess.stdout.on('data', (data) => this.log(data))
@@ -250,7 +246,7 @@ module.exports = function (RED) {
       })
     }
 
-    async downloadIcons(all, force) {
+    async downloadIcons (all, force) {
       if (!this.devicesDb || !this.config.dbUri) return
       const iconsDir = path.join(this.resDir, 'icons')
       if (fs.existsSync(iconsDir)) {
@@ -280,12 +276,12 @@ module.exports = function (RED) {
           if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true })
           fs.createWriteStream(iconPath).write(buffer)
         }
-        catch(err) {
+        catch (err) {
           this.error(err)
         }
       }
 
-      const hwList = all && hws || []
+      const hwList = (all && hws) || []
       if (!all) {
         for (const device of devices) {
           if (device.fw && device.hw) {
@@ -303,54 +299,54 @@ module.exports = function (RED) {
     }
 
     // begin commands
-    backupResources(bakDir) {
+    backupResources (bakDir) {
       bakDir = path.resolve(path.join(this.resDir, '..', bakDir))
       const date = new Date().toISOString().slice(0, 10)
       const bakPath = path.join(bakDir, `${this.config.name}_${date.slice(2, 4)}${date.slice(5, 7)}${date.slice(8, 10)}`)
       if (!fs.existsSync(bakDir)) fs.mkdirSync(bakDir, { recursive: true })
       try {
         fsx.copySync(this.resDir, bakPath)
-      } 
+      }
       catch (err) { this.error(err) }
     }
-    
-    loadMqttMap() {
-      this.mqttMap = fs.existsSync(this.mqttMapPath) && JSONparse(fs.readFileSync(this.mqttMapPath, 'utf8')) || {}
+
+    loadMqttMap () {
+      this.mqttMap = (fs.existsSync(this.mqttMapPath) && JSONparse(fs.readFileSync(this.mqttMapPath, 'utf8'))) || {}
       let mapDirty = false
 
-      //refresh map by existing configs
+      // refresh map by existing configs
       fs.readdirSync(this.confdir).forEach(file => {
         const { ext } = path.parse(file)
         if (ext !== '.json') return
         const filepath = path.join(this.confdir, file)
         const config = JSONparse(fs.readFileSync(filepath, 'utf8'))
-        const ip_address = config?.ip_address
-        const mqtt_topic = config?.mqtt_topic
-        if (mqtt_topic && ip_address && ip_address[0] && !this.mqttMap[ip_address[0]]) {
-          this.mqttMap[ip_address[0]] = mqtt_topic
+        const ipAddress = config?.ip_address
+        const mqttTopic = config?.mqtt_topic
+        if (mqttTopic && ipAddress && ipAddress[0] && !this.mqttMap[ipAddress[0]]) {
+          this.mqttMap[ipAddress[0]] = mqttTopic
           mapDirty = true
         }
-      }) 
+      })
       if (mapDirty) fs.createWriteStream(this.mqttMapPath).write(JSON.stringify(this.mqttMap, null, 2))
       return this.mqttMap
     }
 
-    getRf433Codes() {
+    getRf433Codes () {
       return this.rf433Db.data || {}
     }
 
-    saveRf433Codes(onClose) {
+    saveRf433Codes (onClose) {
       if (onClose) this.rf433DbDirty = true
       else this.rf433Db.save(true)
     }
-    
-    onRfReceived(bridge, time, data) {
+
+    onRfReceived (bridge, time, data) {
       this.emit('rf-received', bridge, time, data)
     }
 
-    async downloadConfig(ip, force = false) {
-      const mqtt_topic = this.mqttMap[ip]
-      const filepath = path.join(this.confdir, (mqtt_topic || ip) + '.json')
+    async downloadConfig (ip, force = false) {
+      const mqttTopic = this.mqttMap[ip]
+      const filepath = path.join(this.confdir, (mqttTopic || ip) + '.json')
 
       try {
         if (force || !fs.existsSync(filepath)) {
@@ -365,9 +361,9 @@ module.exports = function (RED) {
       catch (err) {
         this.error(err.stack || err)
       }
-    
+
       const config = JSONparse(fs.readFileSync(filepath, 'utf8'))
-      if (!mqtt_topic && config?.mqtt_topic) {
+      if (!mqttTopic && config?.mqtt_topic) {
         fs.renameSync(filepath, path.join(this.confdir, config.mqtt_topic + '.json'))
         this.mqttMap[ip] = config.mqtt_topic
         // check/update device ip by host
@@ -381,36 +377,36 @@ module.exports = function (RED) {
         }
         else {
           this._addDbDevice({
-            host: config.hostname, 
-            ip: config.ip_address[0], 
+            host: config.hostname,
+            ip: config.ip_address[0],
             name: config.friendlyname[0]
           })
         }
-  
+
         if (this.devices[config.hostname] !== ip) {
           this.hosts[config.hostname] = ip
         }
-        const sorted = Object.keys(this.mqttMap).sort().reduce((acc, key) => ({...acc, [key]: this.mqttMap[key]}), {})
+        const sorted = Object.keys(this.mqttMap).sort().reduce((acc, key) => ({ ...acc, [key]: this.mqttMap[key] }), {})
         this.mqttMap = sorted
         fs.createWriteStream(this.mqttMapPath).write(JSON.stringify(this.mqttMap, null, 2))
       }
       return config
     }
 
-    async downloadAllConfigs(force = false) {
+    async downloadAllConfigs (force = false) {
       if (!this.mqttMap) this.loadMqttMap()
 
-      //TODO iterate all tasmota devices
-      const devices = this.devicesDb && this.devicesDb.getTable('devices') || []
-      for (let device of devices) {
+      // TODO iterate all tasmota devices
+      const devices = (this.devicesDb && this.devicesDb.getTable('devices')) || []
+      for (const device of devices) {
         if (device.fw && device.ip) {
-          const mqtt_topic = this.mqttMap[device.ip]
-          if (!mqtt_topic || !fs.existsSync(path.join(this.confdir, mqtt_topic + '.json'))) {
+          const mqttTopic = this.mqttMap[device.ip]
+          if (!mqttTopic || !fs.existsSync(path.join(this.confdir, mqttTopic + '.json'))) {
             try {
               this.mqttMap[device.ip] = ''
               await this.downloadConfig(device.ip)
             }
-            catch(err) {
+            catch (err) {
               this.error(err.stack || err)
             }
           }
@@ -418,21 +414,21 @@ module.exports = function (RED) {
       }
     }
 
-    async scanNetwork() {
+    async scanNetwork () {
       if (!this.config.network) return this.error('Network not configured')
-      try{
+      try {
         const parts = this.config.network.split('/')
         const ipBytes = parts[0].split('.')
         if (ipBytes.length !== 4) return this.error('Format error, ip:' + parts[0])
 
         const ipAdr = parts[0].split('.').reduce((sum, b, i) => sum + (b << 8 * (3 - i)), 0)
-        const prefix = (parts.length > 1) && parseInt(parts[1]) || 24
+        const prefix = ((parts.length > 1) && parseInt(parts[1])) || 24
         if (prefix < 16) return this.error('Min supported prefix is 16, configured prefix:' + prefix)
         const mask = (1 << (32 - prefix)) - 1
         const minAdr = ipAdr & ~mask
         const maxAdr = (minAdr + mask)
         const intToIP = (ip) => [24, 16, 8, 0].map(n => (ip >> n) & 0xff).join('.')
-        
+
         this.log(`Scan from ${intToIP(minAdr + 1)} to ${intToIP(maxAdr - 1)}`)
         if (this.busy) return
         this.busy = true
@@ -444,41 +440,41 @@ module.exports = function (RED) {
               res && this.log('Found Tasmota device at ' + ipStr)
               this.downloadConfig(ipStr)
             }
-            catch(err) { }
+            catch (err) { }
           }
         }
       }
-      catch(err){
+      catch (err) {
         this.error(err)
       }
       this.busy = false
     }
 
-    registerDevice(device) {
+    registerDevice (device) {
       this.devices[device.id] = device
-      if (!device.config.ip) return //TODO host
+      if (!device.config.ip) return // TODO host
       const dbDevice = this.devicesDb.findTableRaw('devices', 'ip', device.config.ip)
       if (dbDevice) {
-        let dirty = false
+        const dirty = false
         // TODO compare and update existing device
         if (dirty) this.devicesDb.save(true)
         return
       }
       // add new DB device
-      this._addDbDevice(device.config) //host, ip, mac, name, group, version
+      this._addDbDevice(device.config) // host, ip, mac, name, group, version
     }
 
-    unregisterDevice(device) {
+    unregisterDevice (device) {
       delete this.devices[device.id]
     }
 
-    _addDbDevice(config) {
+    _addDbDevice (config) {
       const db = this.devicesDb?.data || {}
       this.devicesDb.data = db
-      db['devices'] = Array.isArray(db['devices']) ? db['devices'] : []
-      db['groups'] = Array.isArray(db['groups']) ? db['groups'] : []
-      const group = config.group && db['groups'].find(row => (row['name'] === config.group))
-      db['devices'].push({
+      db.devices = Array.isArray(db.devices) ? db.devices : []
+      db.groups = Array.isArray(db.groups) ? db.groups : []
+      const group = config.group && db.groups.find(row => (row.name === config.group))
+      db.devices.push({
         fw: config.version || 1,
         grp: group?.idx || this.grp,
         host: config.host,
@@ -489,70 +485,75 @@ module.exports = function (RED) {
       this.devicesDb.save(true)
     }
 
-    findAP(bssid) {
+    findAP (bssid) {
       const ap = this.devicesDb && this.devicesDb.findTableRaw('devices', 'mac', bssid, true)
       if (ap) return ap
       const db = this.devicesDb?.data || {}
       this.devicesDb.data = db
-      db['devices'] = Array.isArray(db['devices']) ? db['devices'] : []
-      db['devices'].push({ mac: bssid })
+      db.devices = Array.isArray(db.devices) ? db.devices : []
+      db.devices.push({ mac: bssid })
       this.devicesDb.save(true)
     }
 
-    listDevices() {
+    listDevices () {
       const arr = []
-      for(let ip in this.mqttMap) {
-        const opt = {}
-        this.mqttMap[ip] && arr.push((opt[this.mqttMap[ip]] = ip, opt))
+      for (const ip in this.mqttMap) {
+        if (this.mqttMap[ip]) arr.push({ [this.mqttMap[ip]]: ip })
       }
       return arr
     }
 
-    listDeviceNodes() {
+    listDeviceNodes () {
       const arr = []
-      for(let id in this.devices) {
-        const opt = {}
-        const device = this.devices[id].config 
-        arr.push((opt[device.name || device.host] = id, opt))
+      for (const id in this.devices) {
+        const device = this.devices[id].config
+        arr.push({ [device.name || device.host]: id })
       }
       return arr
     }
 
-    listDbDevices(field) {
+    listDbDevices (field) {
       const arr = []
-      let opt
       switch (field) {
-      case 'ip':
-        this.dbDevices['devices'].forEach((el) => (el.fw && el.ip && arr.push(
-          this.mqttMap[el.ip] && (opt = {}, opt[this.mqttMap[el.ip]] = el.ip, opt) || el.ip)))
-        return arr
-      case 'host':
-        this.dbDevices['devices'].forEach((el) => (el.fw && el.host && (el.host !== '?') && arr.push(
-          el.ip && this.mqttMap[el.ip] && (opt = {}, opt[this.mqttMap[el.ip]] = el.host, opt) || el.host)))
-        return arr
-      default:
-        this.dbDevices['devices'].forEach((el) => (el.fw && el.ip && this.mqttMap[el.ip] && arr.push(this.mqttMap[el.ip])))
-        return arr
+        case 'ip':
+          this.dbDevices.devices.forEach((el) => {
+            if (!el.fw || !el.ip) return
+            const mapped = this.mqttMap[el.ip]
+            arr.push(mapped ? { [mapped]: el.ip } : el.ip)
+          })
+          return arr
+        case 'host':
+          this.dbDevices.devices.forEach((el) => {
+            if (!el.fw || !el.host || el.host === '?') return
+            const mapped = el.ip && this.mqttMap[el.ip]
+            arr.push(mapped ? { [mapped]: el.host } : el.host)
+          })
+          return arr
+        default:
+          this.dbDevices.devices.forEach((el) => {
+            if (el.fw && el.ip && this.mqttMap[el.ip]) arr.push(this.mqttMap[el.ip])
+          })
+          return arr
       }
     }
 
-    getMqttDevice(topic) {
-      for(let id in this.devices) {
+    getMqttDevice (topic) {
+      for (const id in this.devices) {
         const device = this.devices[id]
-        if (device.config.device == topic) return device
+        if (device.config.device === topic) return device
       }
     }
 
-    getDbDevices() {
-      return this.dbDevices['devices'].filter((el) => el.fw)
+    getDbDevices () {
+      return this.dbDevices.devices.filter((el) => el.fw)
     }
 
-    getRequest(url, json, timeout) {
+    getRequest (url, json, timeout) {
       return new Promise((resolve, reject) => {
         request(url, { json, timeout }, (err, resp, data) => {
           if (err || (resp && resp.statusCode >= 400) || !data) {
             console.warn('Failed to get ' + url)
-            reject (err ? err : resp.statusCode)
+            reject(err || resp.statusCode)
             this.downloadPending = false
             return
           }
@@ -561,13 +562,14 @@ module.exports = function (RED) {
       })
     }
 
-    mqttCommand(device, command, payload) {
+    mqttCommand (device, command, payload) {
       const tasmota = this.getMqttDevice(device)
       tasmota && tasmota.mqttCommand(command, payload)
     }
 
-    async httpCommand(ip, cmnd, val, timeout) {
-      const url = `http://${ip}/cm?cmnd=${cmnd}` + (val && (' ' + val) || '')
+    async httpCommand (ip, cmnd, val, timeout) {
+      const command = val ? `${cmnd} ${val}` : cmnd
+      const url = `http://${ip}/cm?cmnd=${encodeURIComponent(command)}`
       return await this.getRequest(url, true, timeout)
     }
     // end commands

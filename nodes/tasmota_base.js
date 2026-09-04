@@ -1,5 +1,7 @@
 'use strict'
 
+const { extractChannelNum } = require('./lib/utils')
+
 const TASMOTA_DEFAULTS = {
   // basic
   device: '', // mandatory
@@ -13,23 +15,23 @@ const LWT_ONLINE = 'Online'
 const LWT_OFFLINE = 'Offline'
 
 class TasmotaBase {
-  constructor(config, RED, more_defaults = {}) {
+  constructor (config, RED, moreDefaults = {}) {
     RED.nodes.createNode(this, config)
 
     this.closing = false
 
     // Merge base and child defaults
-    const defaults = Object.assign({}, TASMOTA_DEFAULTS, more_defaults)
+    const defaults = Object.assign({}, TASMOTA_DEFAULTS, moreDefaults)
 
     // Merge user and default config
     this.config = {}
     for (const key in defaults) {
       if (config[key] !== undefined && config[key] !== '') {
-        if ((typeof defaults[key] == 'number') && (typeof config[key] === 'string')) {
+        if ((typeof defaults[key] === 'number') && (typeof config[key] === 'string')) {
           this.config[key] = parseInt(config[key])
         }
         else this.config[key] = config[key]
-      } 
+      }
       else {
         this.config[key] = defaults[key]
       }
@@ -56,7 +58,8 @@ class TasmotaBase {
       if (msg.topic === 'command') {
         // if topic is 'command' send raw tasmota commands over MQTT
         this.sendRawCommand(msg.payload)
-      } else {
+      }
+      else {
         // Or let the child class handle the msg
         this.onNodeInput(msg)
       }
@@ -76,17 +79,17 @@ class TasmotaBase {
     })
   }
 
-  _onMqttEvent(ev) {
+  _onMqttEvent (ev) {
     switch (ev) {
       case 'BrokerConnecting':
         // force the status, regardless the LWT
         this.status({ fill: 'yellow', shape: 'ring', text: 'Broker connecting' })
-        break;
+        break
       case 'BrokerOnline':
         // probably this is never shown, as the LWT sould be Offline
         // at this point. But we need to update the status.
         this.setNodeStatus('red', 'Broker connected', 'ring')
-        break;
+        break
       case 'BrokerOffline':
         if (!this.closing) {
           // force the status, regardless the LWT
@@ -94,27 +97,27 @@ class TasmotaBase {
           this._sendEnableUI(false)
           this._onMqttEvent('DeviceOffline')
         }
-        break;
+        break
       case 'DeviceOnline':
         this.setNodeStatus('green', LWT_ONLINE, 'ring')
         this._sendEnableUI(true)
-        break;
+        break
       case 'DeviceOffline':
         this.setNodeStatus('red', LWT_OFFLINE, 'ring')
         this._sendEnableUI(false)
-        break;
+        break
     }
   }
 
-  _onDeviceEvent(ev, data) {
+  _onDeviceEvent (ev, data) {
     switch (ev) {
       case 'send':
         this.onSend(data)
-        break;
+        break
     }
   }
 
-  onSend(msg) {
+  onSend (msg) {
     if (Array.isArray(msg)) {
       if (this.config.sendDevice) msg.forEach(pinMsg => pinMsg && (pinMsg.device = this.deviceNode.config.device))
     }
@@ -122,33 +125,36 @@ class TasmotaBase {
     this.send(msg)
   }
 
-  _sendEnableUI(enabled) {
+  _sendEnableUI (enabled) {
     if (this.config.uidisabler) {
       this.sendToAllOutputs({ enabled })
     }
   }
 
-  sendToAllOutputs(msg) {
+  sendToAllOutputs (msg) {
     const count = Number(this.config.outputs) || 1
     if (count === 1) {
       this.send(msg)
-    } else {
+    }
+    else {
       this.send(new Array(count).fill(msg))
     }
   }
 
-  sendRawCommand(payload) {
+  sendRawCommand (payload) {
     if (typeof payload === 'string') {
       // 1. string payload: 'CMD <param>'
       const [cmd, param] = payload.split(' ', 2)
       this.mqttCommand(cmd, param)
-    } else if (Array.isArray(payload)) {
+    }
+    else if (Array.isArray(payload)) {
       // 2. list payload: ['CMD <param>', 'CMD <param>', ...]
       for (let i = 0; i < payload.length; i++) {
         const [cmd, param] = payload[i].split(' ', 2)
         this.mqttCommand(cmd, param)
       }
-    } else if (typeof payload === 'object') {
+    }
+    else if (typeof payload === 'object') {
       // 3. object payload: {'CMD': 'param', 'CMD': 'param', ...}
       for (const cmd in payload) {
         if (Object.prototype.hasOwnProperty.call(payload, cmd)) {
@@ -156,48 +162,49 @@ class TasmotaBase {
           this.mqttCommand(cmd, param)
         }
       }
-    } else {
+    }
+    else {
       this.warn('Invalid payload received for raw tasmota commands')
     }
   }
 
-  onNodeInput(msg) {
+  onNodeInput (msg) {
     // Subclasses can override to receive input messagges from NodeRed
   }
 
-  setNodeStatus(fill, text, shape) {
+  setNodeStatus (fill, text, shape) {
     const isOnline = this.deviceNode && this.deviceNode.isOnline
     if (isOnline) {
-      text = this.deviceNode.ap && `${text}(${this.deviceNode.ap})` || text
+      text = (this.deviceNode.ap && `${text}(${this.deviceNode.ap})`) || text
       this.status({
-        fill: fill,
-        text: text,
+        fill,
+        text,
         shape: shape || 'dot'
       })
-    } else {
+    }
+    else {
       this.status({
         fill: 'red',
         shape: 'ring',
-        text: isOnline && LWT_ONLINE || LWT_OFFLINE
+        text: (isOnline && LWT_ONLINE) || LWT_OFFLINE
       })
     }
   }
 
-  mqttCommand(command, payload) {
+  mqttCommand (command, payload) {
     this.deviceNode.mqttCommand(command, payload)
   }
 
-  mqttSubscribeTele(command, callback) {
+  mqttSubscribeTele (command, callback) {
     this.deviceNode.mqttSubscribeTele(this, command, callback)
   }
 
-  mqttSubscribeStat(command, callback) {
+  mqttSubscribeStat (command, callback) {
     this.deviceNode.mqttSubscribeStat(this, command, callback)
   }
 
-  extractChannelNum(str) {
-    const numberRegexp = /\d+$/
-    return Number(str.match(numberRegexp) || 1)
+  extractChannelNum (str) {
+    return extractChannelNum(str)
   }
 }
 

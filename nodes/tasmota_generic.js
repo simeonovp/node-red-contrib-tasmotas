@@ -16,7 +16,7 @@ module.exports = function (RED) {
         this.mqttSubscribeStat('+', (topic, payload) => {
           this.onMqttMessage(topic, payload)
         })
-      } 
+      }
       else {
         this.mqttSubscribeStat('RESULT', (topic, payload) => {
           this.onMqttMessage(topic, payload)
@@ -34,13 +34,13 @@ module.exports = function (RED) {
       let payload = ''
       try {
         payload = JSON.parse(payloadBuf.toString())
-      } 
+      }
       catch (err) {
         return // ignore any non-json payload
       }
 
       // Forward to the node output
-      const msg = { topic: topic, payload: payload }
+      const msg = { topic, payload }
       this.onSend(msg)
     }
 

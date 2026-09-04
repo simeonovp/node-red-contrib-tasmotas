@@ -155,7 +155,7 @@ module.exports = function (RED) {
       if (!msg.topic && typeof msg.payload === 'object') {
         for (const [key, value] of Object.entries(msg.payload)) {
           processCmd(key.toLowerCase())
-       }
+        }
       }
 
       // did we found something usefull?
@@ -191,10 +191,10 @@ module.exports = function (RED) {
       if (data.rgb !== undefined) {
         if (typeof data.rgb === 'string') {
           this.mqttCommand(this.colorCmnd, data.rgb)
-        } 
+        }
         else if (Array.isArray(data.rgb) && (data.rgb.length === 3)) {
           this.mqttCommand(this.colorCmnd, data.rgb.toString())
-        } 
+        }
         else {
           this.warn('Invalid value for the \'rgb\' command (should be: [r,g,b] [0-255, 0-255, 0-255])')
         }
@@ -204,10 +204,10 @@ module.exports = function (RED) {
       if (data.hsb !== undefined) {
         if (typeof data.hsb === 'string') {
           this.mqttCommand('HsbColor', data.hsb)
-        } 
+        }
         else if (Array.isArray(data.hsb) && data.hsb.length === 3) {
           this.mqttCommand('HsbColor', data.hsb.toString())
-        } 
+        }
         else {
           this.warn('Invalid value for the \'hsb\' command (should be: [h,s,b] [0-360, 0-100, 0-100])')
         }
@@ -218,11 +218,11 @@ module.exports = function (RED) {
         if (typeof data.hex === 'string') {
           data.hex = (data.hex[0] === '#') ? data.hex : '#' + data.hex
           if ((data.hex.length === 5) || (data.hex.length === 7) || (data.hex.length === 9) || (data.hex.length === 11)) {
-            if (data.hex.length >  5) data.hex = (data.hex + '====').substring(0, 11)
+            if (data.hex.length > 5) data.hex = (data.hex + '====').substring(0, 11)
             this.mqttCommand(this.colorCmnd, data.hex)
-          } 
+          }
           else this.warn('Invalid length for the \'hex\' command (should be: #CWWW, #RRGGBB, #RRGGBBWW or #RRGGBBCWWW)')
-        } 
+        }
         else this.warn('Invalid type for the \'hex\' command (should be: #CWWW, #RRGGBB, #RRGGBBWW or #RRGGBBCWWW)')
       }
 
@@ -232,15 +232,15 @@ module.exports = function (RED) {
           const colorCode = TASMOTA_COLORS[data.color.replace(/\s/g, '').toLowerCase()]
           if (colorCode !== undefined) {
             this.mqttCommand(this.colorCmnd, colorCode)
-          } 
+          }
           else this.warn('Invalid value for the \'color\' command (should be a color name or +/-)')
-        } 
+        }
         else this.warn('Invalid type for the \'color\' command (should be a string)')
       }
 
       // bright: 0-100
       const sendDimmer = (dimmer, idx) => {
-        idx = idx && idx.toString() || ''
+        idx = (idx && idx.toString()) || ''
         dimmer = parseInt(dimmer)
         if (isNaN(dimmer) || (dimmer < 0) || (dimmer > 100)) {
           this.warn('Invalid value for the \'bright\' command (should be: 0-100)')
@@ -257,18 +257,18 @@ module.exports = function (RED) {
         data.ct = parseInt(data.ct)
         if (isNaN(data.ct)) {
           this.warn('Invalid value for the \'ct\' command (should be: 0-100, 2000-6500 or 500-153)')
-        } 
+        }
         else if ((data.ct >= 153) && (data.ct <= 500)) { // ct in mired (cold to warm)
           this.mqttCommand('CT', ct.toString())
-        } 
+        }
         else if ((data.ct >= 0) && (data.ct <= 100)) { // ct in percent (warm to cold)
           data.ct = percent2mired(data.ct)
           this.mqttCommand('CT', data.ct.toString())
-        } 
+        }
         else if ((data.ct >= 2000) && (data.ct <= 6500)) { // ct in kelvin (warm to cold)
           data.ct = kelvin2mired(data.ct)
           this.mqttCommand('CT', data.ct.toString())
-        } 
+        }
         else {
           this.warn('Invalid value for the \'ct\' command (should be: 0-100, 2000-6500 or 500-153)')
         }
@@ -279,7 +279,7 @@ module.exports = function (RED) {
       let data
       try {
         data = JSON.parse(mqttPayloadBuf.toString())
-      } 
+      }
       catch (err) {
         this.setNodeStatus('red', 'Error parsing JSON data from device')
         this.error(err, 'Error parsing JSON data from device')
@@ -298,9 +298,11 @@ module.exports = function (RED) {
       if (this.config.havetemp && data.CT !== undefined) {
         if (this.config.tempformat === 'K') {
           this.cache.ct = mired2kelvin(data.CT)
-        } else if (this.config.tempformat === 'P') {
+        }
+        else if (this.config.tempformat === 'P') {
           this.cache.ct = mired2percent(data.CT)
-        } else { // mired
+        }
+        else { // mired
           this.cache.ct = data.CT
         }
       }
@@ -309,13 +311,13 @@ module.exports = function (RED) {
           const hsb = data.HSBColor.split(',').map(Number)
           if (this.config.colorsformat === 'HSB') {
             this.cache.colors = hsb
-          } 
+          }
           else if (this.config.colorsformat === 'RGB') {
             this.cache.colors = hsb2rgb(hsb[0], hsb[1], hsb[2])
-          } 
+          }
           else if (this.config.colorsformat === 'HEX') {
             this.cache.colors = data.Color
-          } 
+          }
           else { // Channels
             this.cache.colors = data.Channel
           }
@@ -325,22 +327,26 @@ module.exports = function (RED) {
         this.cache.channel = data.Channel
       }
 
-      const msg = (payload) => (payload !== undefined) && { payload } || null
+      const msg = (payload) => ((payload !== undefined) && { payload }) || null
       // send all the cached data to the node output(s)
       // or send each value to the correct output
       if (this.config.outputs === 1 || this.config.outputs === '1') {
         // everything to the same (single) output, as a JSON dict object
         this.onSend({ payload: this.cache })
-      } 
+      }
       else if (this.config.outputs === 2 || this.config.outputs === '2') {
-        if (this.config.dualLights) this.onSend([
-          msg(this.cache.on1), // Output 1: on/off status color
-          msg(this.cache.on2) // Output 2: on/off status white
-        ])
-        else this.onSend([
-          msg(this.cache.on), // Output 1: on/off status
-          msg(this.cache.bright) // Output 2: brightness
-        ])
+        if (this.config.dualLights) {
+          this.onSend([
+            msg(this.cache.on1), // Output 1: on/off status color
+            msg(this.cache.on2) // Output 2: on/off status white
+          ])
+        }
+        else {
+          this.onSend([
+            msg(this.cache.on), // Output 1: on/off status
+            msg(this.cache.bright) // Output 2: brightness
+          ])
+        }
       }
       else if (this.config.outputs === 3 || this.config.outputs === '3') {
         if (this.config.dualLights) return this.error('Invalide output count. must be odd for dual lights mode')
@@ -351,37 +357,45 @@ module.exports = function (RED) {
         ])
       }
       else if (this.config.outputs === 4 || this.config.outputs === '4') {
-        if (this.config.dualLights) this.onSend([
-          msg(this.cache.on1), // Output 1: on/off status color
-          msg(this.cache.dimmer1), // Output 2: brightness color
-          msg(this.cache.on2), // Output 3: on/off status white
-          msg(this.cache.dimmer2) // Output 4: brightness white
-        ])
-        else this.onSend([
-          msg(this.cache.on), // Output 1: on/off status
-          msg(this.cache.bright), // Output 2: brightness
-          msg(this.cache.ct), // Output 3: temperature
-          msg(this.cache.colors) // Output 4: colors
-        ])
+        if (this.config.dualLights) {
+          this.onSend([
+            msg(this.cache.on1), // Output 1: on/off status color
+            msg(this.cache.dimmer1), // Output 2: brightness color
+            msg(this.cache.on2), // Output 3: on/off status white
+            msg(this.cache.dimmer2) // Output 4: brightness white
+          ])
+        }
+        else {
+          this.onSend([
+            msg(this.cache.on), // Output 1: on/off status
+            msg(this.cache.bright), // Output 2: brightness
+            msg(this.cache.ct), // Output 3: temperature
+            msg(this.cache.colors) // Output 4: colors
+          ])
+        }
       }
       else if (this.config.outputs === 5 || this.config.outputs === '5') {
-        if (this.config.dualLights) this.onSend([
-          msg(this.cache.on1), // Output 1: on/off status color
-          msg(this.cache.dimmer1), // Output 2: brightness color
-          msg(this.cache.on2), // Output 3: on/off status white
-          msg(this.cache.dimmer2), // Output 4: brightness white
-          msg(this.cache.ct), // Output 5: temperature color
-        ])
+        if (this.config.dualLights) {
+          this.onSend([
+            msg(this.cache.on1), // Output 1: on/off status color
+            msg(this.cache.dimmer1), // Output 2: brightness color
+            msg(this.cache.on2), // Output 3: on/off status white
+            msg(this.cache.dimmer2), // Output 4: brightness white
+            msg(this.cache.ct) // Output 5: temperature color
+          ])
+        }
       }
       else if (this.config.outputs === 6 || this.config.outputs === '6') {
-        if (this.config.dualLights) this.onSend([
-          msg(this.cache.on1), // Output 1: on/off status color
-          msg(this.cache.dimmer1), // Output 2: brightness color
-          msg(this.cache.on2), // Output 3: on/off status white
-          msg(this.cache.dimmer2), // Output 4: brightness white
-          msg(this.cache.ct), // Output 5: temperature color
-          msg(this.cache.colors) // Output 6: colors
-        ])
+        if (this.config.dualLights) {
+          this.onSend([
+            msg(this.cache.on1), // Output 1: on/off status color
+            msg(this.cache.dimmer1), // Output 2: brightness color
+            msg(this.cache.on2), // Output 3: on/off status white
+            msg(this.cache.dimmer2), // Output 4: brightness white
+            msg(this.cache.ct), // Output 5: temperature color
+            msg(this.cache.colors) // Output 6: colors
+          ])
+        }
       }
       else return this.error('Invalide output count.')
 
