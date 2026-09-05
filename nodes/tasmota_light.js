@@ -103,41 +103,41 @@ module.exports = function (RED) {
       }
 
       // MODE 2: topic mode (with simple-typed payload)
-      const processCmd = (cmd) => {
+      const processCmd = (cmd, value) => {
         switch (cmd) {
           case 'on': case 'state': case 'power':
-            data.on1 = msg.payload
-            data.on2 = msg.payload
+            data.on1 = value
+            data.on2 = value
             break
           case 'power1':
-            data.on1 = msg.payload
+            data.on1 = value
             break
           case 'power2':
-            data.on2 = msg.payload
+            data.on2 = value
             break
           case 'bright': case 'brightness': case 'dimmer':
-            data.bright = msg.payload
+            data.bright = value
             break
           case 'dimmerc':
-            data.dimmerc = msg.payload
+            data.dimmerc = value
             break
           case 'dimmerw':
-            data.dimmerw = msg.payload
+            data.dimmerw = value
             break
           case 'ct': case 'colortemp':
-            data.ct = msg.payload
+            data.ct = value
             break
           case 'rgb': case 'rgbcolor':
-            data.rgb = msg.payload
+            data.rgb = value
             break
           case 'hsb': case 'hsbcolor':
-            data.hsb = msg.payload
+            data.hsb = value
             break
           case 'hex': case 'hexcolor':
-            data.hex = msg.payload
+            data.hex = value
             break
           case 'color':
-            data.color = msg.payload
+            data.color = value
             break
           default:
             this.error('Unsupported topic ' + cmd)
@@ -148,18 +148,18 @@ module.exports = function (RED) {
            (typeof msg.payload === 'number') ||
            (typeof msg.payload === 'string') ||
            Array.isArray(msg.payload))) {
-        processCmd(msg.topic.toLowerCase())
+        processCmd(msg.topic.toLowerCase(), msg.payload)
       }
 
       // MODE 3: object payload (without topic)
       if (!msg.topic && typeof msg.payload === 'object') {
         for (const [key, value] of Object.entries(msg.payload)) {
-          processCmd(key.toLowerCase())
+          processCmd(key.toLowerCase(), value)
         }
       }
 
       // did we found something usefull?
-      if (!Object.keys.length) {
+      if (!Object.keys(data).length) {
         this.warn('Invalid message received on input')
         return
       }
@@ -259,7 +259,7 @@ module.exports = function (RED) {
           this.warn('Invalid value for the \'ct\' command (should be: 0-100, 2000-6500 or 500-153)')
         }
         else if ((data.ct >= 153) && (data.ct <= 500)) { // ct in mired (cold to warm)
-          this.mqttCommand('CT', ct.toString())
+          this.mqttCommand('CT', data.ct.toString())
         }
         else if ((data.ct >= 0) && (data.ct <= 100)) { // ct in percent (warm to cold)
           data.ct = percent2mired(data.ct)
