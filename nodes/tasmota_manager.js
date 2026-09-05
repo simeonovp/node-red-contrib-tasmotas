@@ -229,8 +229,8 @@ module.exports = function (RED) {
         const data = await this.getRequest(url)
         fs.createWriteStream(localPath).write(data)
       }
-      catch {
-        this.error(`Error on downloading decode-config tool from ${url}. Download the tool manualy to ${this.confdir}`)
+      catch (err) {
+        this.error(`Error on downloading decode-config tool from ${url}. Download the tool manualy to ${this.confdir} (${err.message})`)
       }
     }
 

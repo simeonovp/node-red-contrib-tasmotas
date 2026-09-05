@@ -1,20 +1,6 @@
-TODOs:
--------------------
-Code review findings (2026-09-04)
--------------------
-Code quality / maintainability:
- - mix of callback-style done()/send() and async/await/Promises across nodes (tasmota_config.js, tasmota_manager.js) - inconsistent error propagation (some catch blocks swallow err instead of calling done(err)). Left for a behavioral-fix pass since resolving it means deciding a consistent error-handling pattern per call site, not a mechanical change.
+# TODOs:
 
-Test suite:
-Regression test suite lives under test/ (mocha + node-red-node-test-helper +
-an embedded aedes MQTT broker, see test/helpers/), covering all 14 node
-types. Run via `npm run test:unit`, or `npm test` which additionally gates
-on `eslint .` first. Bugs above that have a red test tracking them will turn
-that test green once fixed - don't "fix" a red test by changing the
-assertion, fix the underlying node code and re-run.
--------------------
-v2.2.0
--------------------
+# v2.2.0
  - Fixed: tasmota-device and tasmota-manager nodes failed to load entirely (missing dependency)
  - Fixed: tasmota-light rejected color temperature (CT) values in the 153-500 range instead of sending them
  - Fixed: tasmota-light ignored individual values when given as an object payload (e.g. {bright: 50})
@@ -29,24 +15,19 @@ v2.2.0
  - Fixed: tasmota-shutter never showed the green Open/Closed status at the fully open/closed positions, always showing the grey percentage instead
  - Removed the deprecated `request` HTTP library (unmaintained since 2020, known vulnerable transitive dependencies) in favor of Node's built-in fetch
  - Updated the MQTT client library (mqtt) to the current major version (v5)
--------------------
-v1.0.4
--------------------
+
+# v1.0.4
  - Fixed bug RF bridge node on try sending raw codes
  - tasmota_manager: Avoid load error in case of corrupt JSON 
--------------------
-v1.0.3
--------------------
+
+# v1.0.3
  - Fixed bug in sensor subscription 
--------------------
-v1.0.2
--------------------
+
+# v1.0.2
  - Fixed critical error on using tasmota-manager (Project)
--------------------
-v1.0.1
--------------------
+
+# v1.0.1
  - Added soppurt for RF devices
--------------------
-v1.0.0
--------------------
+
+# v1.0.0
  - First public release

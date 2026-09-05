@@ -66,6 +66,26 @@ describe('tasmota-config node', function () {
     assert.deepStrictEqual(received[0].payload, { Topic: 'dev1' })
   })
 
+  it('reports an error via done(err) when a synchronous action throws', async function () {
+    // Regression: sync actions (listDevices, findAP, ...) used to run outside
+    // any try/catch, so a thrown error would escape uncaught by this node's
+    // own logic instead of going through done(err).
+    const flow = [
+      { id: 'n1', type: 'fake-manager' },
+      { id: 'n2', type: 'tasmota-config', manager: 'n1', wires: [['n3']] },
+      helperNode('n3')
+    ]
+    await helper.load([fakeManagerModule, configNodeModule], flow)
+    const n1 = helper.getNode('n1')
+    const n2 = helper.getNode('n2')
+    n1.listDevices = () => { throw new Error('boom') }
+
+    n2.receive({ action: 'listDevices' })
+
+    await waitUntil(() => n2.error.called)
+    assert.strictEqual(n2.error.lastCall.args[0].message, 'boom')
+  })
+
   it('reports an error when no manager is configured', async function () {
     const flow = [
       { id: 'n2', type: 'tasmota-config', manager: '', wires: [['n3']] },

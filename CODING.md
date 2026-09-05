@@ -1,6 +1,9 @@
 
-### Standard.js
-This project respect the standard.js format
+### Code style
+This project uses ESLint with the `neostandard` ruleset (see `eslint.config.js`), with one override: `else`/`catch`/`finally` always start on a new line (Stroustrup brace style) instead of the neostandard default. Run `npm run lint` (or `npx eslint . --fix` for the auto-fixable parts).
+
+### Tests
+Regression tests live under `test/` (mocha + node-red-node-test-helper + an embedded aedes MQTT broker). Run `npm run test:unit`.
 
 
 ### Release procedure

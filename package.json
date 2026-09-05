@@ -63,7 +63,6 @@
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
-    "img/*",
     "nodes/*"
   ]
 }

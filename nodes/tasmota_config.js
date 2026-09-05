@@ -11,7 +11,16 @@ module.exports = function (RED) {
         if (!this.manager) return done('Manager not found')
         // TODO check needs convert device to IP
         if (!msg.action) msg.action = msg.topic
+        this.onInput(msg, send, done)
+      })
+    }
 
+    // All actions (sync and async) share one try/catch and always finish via
+    // done()/done(err) - done(err) already reports the error through
+    // node.error() and correctly marks the message as failed for
+    // Catch/Status/Complete nodes, so there's no separate this.error() call.
+    async onInput (msg, send, done) {
+      try {
         switch (msg.action) {
           case 'backupResources':
             this.manager.backupResources(msg.payload || './backup')
@@ -35,22 +44,6 @@ module.exports = function (RED) {
           case 'getDbDevices':
             msg.payload = this.manager.getDbDevices()
             break
-          default:
-            try {
-              return this.onInput(msg, send, done)
-            }
-            catch (err) {
-              done(err)
-            }
-        }
-        send(msg)
-        done()
-      })
-    }
-
-    async onInput (msg, send, done) {
-      try {
-        switch (msg.action) {
           case 'httpCommand':
             if (!msg.ip && !msg.host) return done('IP address or host must be selected')
             if (!msg.command && !msg.topic) return done('Command not selected')
@@ -71,11 +64,11 @@ module.exports = function (RED) {
             return done()
         }
         send(msg)
+        done()
       }
       catch (err) {
-        this.error(err)
+        done(err)
       }
-      done()
     }
   }
 
