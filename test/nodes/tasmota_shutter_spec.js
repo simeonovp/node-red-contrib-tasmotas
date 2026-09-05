@@ -75,11 +75,7 @@ describe('tasmota-shutter node', function () {
     await closeClient(client)
   })
 
-  it('shows a green Open/Closed status at the end stops (NEW BUG found via this test, see CHANGELOG)', async function () {
-    // tasmota_shutter.js onSend() branches on `this.shutter.position`, but
-    // the Shutter class (nodes/tasmota_device.js) only ever sets
-    // `this.data.Position` - `shutter.position` is always undefined, so the
-    // green Open/Closed status is never shown, only the grey "N%" fallback.
+  it('shows a green Open/Closed status at the end stops', async function () {
     const flow = baseFlow('sh04')
     await helper.load([brokerNodeModule, deviceNodeModule, shutterNodeModule], flow)
     const n3 = helper.getNode('n3')

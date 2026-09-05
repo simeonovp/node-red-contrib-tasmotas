@@ -83,8 +83,8 @@ module.exports = function (RED) {
       switch (msg.topic) {
         case 'position':
           // update status icon and label
-          if (this.shutter.position === 100) this.setNodeStatus('green', (this.config.swapSwitches) ? 'Open' : 'Closed')
-          else if (this.shutter.position === 0) this.setNodeStatus('green', (this.config.swapSwitches) ? 'Closed' : 'Open')
+          if (this.shutter.data.Position === 100) this.setNodeStatus('green', (this.config.swapSwitches) ? 'Open' : 'Closed')
+          else if (this.shutter.data.Position === 0) this.setNodeStatus('green', (this.config.swapSwitches) ? 'Closed' : 'Open')
           else this.setNodeStatus('grey', this.shutter.data.Position.toString() + '%')
           break
       }

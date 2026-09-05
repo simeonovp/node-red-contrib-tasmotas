@@ -2,12 +2,6 @@ TODOs:
 -------------------
 Code review findings (2026-09-04)
 -------------------
-Bugs:
- - tasmota_manager.js: _spawnDecodeConfig() spawns 'python' with no 'error' handler and no check whether python/python3 is installed -> unhandled error event / unclear failure for users
- - tasmota_shutter.js: onSend() branches on `this.shutter.position` to show a green "Open"/"Closed" status at the 0%/100% end stops, but the Shutter class (tasmota_device.js) only ever sets `this.data.Position` - `.position` is always undefined, so the green status is never shown, only the grey "N%" fallback, even fully open/closed. Test: tasmota_shutter_spec.js.
- - tasmota_manager.js: getDbDevices() does `this.dbDevices['devices'].filter(...)` unconditionally, but DbBase#load() leaves `data = {}` (no `.devices` key) when the backing JSON file doesn't exist yet - throws a TypeError on a brand-new install before devices.json has ever been downloaded/created, instead of returning an empty list. Test: tasmota_manager_spec.js.
- - tasmota_manager.js: the constructor does `this.status = 'unconfigured'`, which shadows the inherited Node-RED `Node.prototype.status()` function with a plain string on the instance - any later `this.status({...})` call would throw "this.status is not a function". Test: tasmota_manager_spec.js.
-
 Dependencies (outdated / risky):
  - "child_process": "^1.0.2" listed as an npm dependency, but child_process is a Node core module - this pulls in an unnecessary/confusing package, should just be removed
  - "request" is deprecated since 2020 (no more updates, known vulnerable transitive deps like tough-cookie) - migrate to native fetch (Node >=18) or undici
@@ -37,6 +31,9 @@ v2.2.0
  - Fixed: repeated redeploys of a flow with tasmota-rf-manager/tasmota-rf-device could leak listeners, eventually causing received RF codes to be processed multiple times
  - Fixed: tasmota-rf-manager could crash when looking up timing data for a bridge/device combination it hadn't seen yet
  - Fixed: tasmota-rf-device could crash on startup if its configured RF manager reference was stale or missing
+ - Fixed: tasmota-manager could crash listing devices before the device database had been downloaded for the first time
+ - Fixed: tasmota-manager could crash the whole runtime if python was not installed/on PATH when downloading a device config
+ - Fixed: tasmota-shutter never showed the green Open/Closed status at the fully open/closed positions, always showing the grey percentage instead
 -------------------
 v1.0.4
 -------------------

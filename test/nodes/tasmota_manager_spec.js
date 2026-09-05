@@ -39,12 +39,7 @@ describe('tasmota-manager node', function () {
     assert.deepStrictEqual(n1.listDevices(), [])
   })
 
-  it('getDbDevices() does not crash on a brand-new install with no devices.json yet (NEW BUG found via this test, see CHANGELOG)', async function () {
-    // DbBase#load() sets `this.data = {}` (no `.devices` array) when the
-    // backing file does not exist yet, but getDbDevices() does
-    // `this.dbDevices['devices'].filter(...)` unconditionally - a fresh
-    // install (no resources/<name>/devices.json yet) throws a TypeError
-    // instead of returning an empty list.
+  it('getDbDevices() does not crash on a brand-new install with no devices.json yet', async function () {
     const name = uniqueName('freshdb')
     const flow = [managerConfig('n1', { name })]
     await helper.load(managerNodeModule, flow)
@@ -53,11 +48,7 @@ describe('tasmota-manager node', function () {
     assert.deepStrictEqual(n1.getDbDevices(), [])
   })
 
-  it('overwrites the inherited status() method with a plain string (NEW BUG found via this test, see CHANGELOG)', async function () {
-    // The constructor does `this.status = 'unconfigured'`, shadowing the
-    // Node-RED Node.prototype.status() function every node relies on to show
-    // its status dot/text in the editor - calling n.status(...) after this
-    // throws "n.status is not a function".
+  it('does not shadow the inherited status() method', async function () {
     const name = uniqueName('status')
     const flow = [managerConfig('n1', { name })]
     await helper.load(managerNodeModule, flow)

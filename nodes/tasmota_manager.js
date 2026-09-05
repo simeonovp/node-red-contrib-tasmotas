@@ -136,7 +136,7 @@ module.exports = function (RED) {
       RED.nodes.createNode(this, config)
 
       this.config = config
-      this.status = 'unconfigured'
+      this.dbStatus = 'unconfigured'
 
       this.resDir = path.resolve(path.join(__dirname, '../resources', config.name))
       this.manifestDb = new DbBase({ path: path.join(this.resDir, 'manifest.json') })
@@ -181,14 +181,14 @@ module.exports = function (RED) {
       else this.loadMqttMap()
     }
 
-    get dbDevices () { return this.devicesDb.data }
+    get dbDevices () { return this.devicesDb.ensureData() }
     get network () { return this.networkDb.data }
 
     async initialize (overwrite = false) {
       // download:
       if (!this.config.dbUri) return
-      if (!overwrite && (this.status === 'configured')) return
-      if (this.status === 'initializing') return
+      if (!overwrite && (this.dbStatus === 'configured')) return
+      if (this.dbStatus === 'initializing') return
       this._setStatus('initializing')
       try {
         if (this.devicesDb && await this.devicesDb.download(true)) this.devicesDb.save(overwrite)
@@ -211,13 +211,13 @@ module.exports = function (RED) {
         this._setStatus('configured')
       }
       catch (err) {
-        this.status = 'unconfigured'
+        this.dbStatus = 'unconfigured'
         this.error(err.stack || err)
       }
     }
 
     _setStatus (status) {
-      this.status = status
+      this.dbStatus = status
       // Pass the new status to all listeners
       // ?? this.emit('devdb_status', status)
     }
@@ -242,6 +242,9 @@ module.exports = function (RED) {
         const pythonProcess = spawn('python', [this.confdir + '/decode-config.py', ...params])
         pythonProcess.stdout.on('data', (data) => this.log(data))
         pythonProcess.stderr.on('data', (data) => this.warn(data))
+        pythonProcess.on('error', (err) => {
+          reject(new Error(`Failed to run decode-config.py - is python installed and on PATH? (${err.message})`))
+        })
         pythonProcess.on('exit', (code, signal) => resolve(code))
       })
     }
