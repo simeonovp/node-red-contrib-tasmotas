@@ -65,33 +65,18 @@ describe('tasmota-rf-device node', function () {
     assert.strictEqual(received[0].payload, 'on')
   })
 
-  it('throws constructing lastBridge when the configured manager id is stale (KNOWN BUG, see CHANGELOG)', async function () {
+  it('constructs cleanly with an empty lastBridge when the configured manager id is stale', async function () {
     // `const manager = config.manager && RED.nodes.getNode(config.manager)`
     // is `undefined` (not '') when config.manager is a *non-empty* id that
     // no longer resolves to a node (e.g. the manager was deleted). The next
-    // line, `bridgeTopic || manager.defaultBridge || ''`, then throws
-    // because it doesn't use optional chaining like the other `manager?.`
-    // call sites in this file do.
+    // line reads `manager?.defaultBridge`, so this no longer throws.
     const flow = baseFlow({ manager: 'stale-id-does-not-exist' })
-    let threw = false
-    try {
-      await helper.load([fakeRfManagerModule, rfDeviceNodeModule], flow)
-    }
-    catch (err) {
-      threw = true
-    }
-    // Node-RED's runtime catches constructor exceptions per-node rather than
-    // rejecting the whole flow load, so a failed construction can show up
-    // either as a rejected load() or as the node simply never registering.
+    await helper.load([fakeRfManagerModule, rfDeviceNodeModule], flow)
     const n2 = helper.getNode('n2')
-    assert.ok(threw || !n2, 'expected the node to fail to construct due to the stale manager reference')
+    assert.strictEqual(n2.lastBridge, '')
   })
 
-  it('removes its per-code listeners from the manager on close (KNOWN BUG, see CHANGELOG)', async function () {
-    // Same class of bug as tasmota-rf-manager: close() removes a freshly
-    // bound function instead of the one passed to addListener() in the
-    // constructor, so the listeners for each configured code are never
-    // actually removed.
+  it('removes its per-code listeners from the manager on close', async function () {
     await helper.load([fakeRfManagerModule, rfDeviceNodeModule], baseFlow())
     const n1 = helper.getNode('n1')
     assert.strictEqual(n1.listenerCount('ABCDEF'), 1)

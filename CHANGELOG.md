@@ -3,9 +3,6 @@ TODOs:
 Code review findings (2026-09-04)
 -------------------
 Bugs:
- - tasmota_rf_device.js: `this.lastBridge = bridgeTopic || manager.defaultBridge || ''` throws when the configured manager id no longer resolves to a node (e.g. a stale/deleted reference after a partial redeploy) - `manager` is `undefined` in that case, not the empty string you'd get when unconfigured, and this line (unlike the other `manager?.` call sites in the same file) doesn't use optional chaining. Confirmed by a regression test.
- - tasmota_rf_manager.js: getTimings()/saveTimings() call .find(...) on this.rf433Data[group] without checking the result, throws if device/group not found yet
- - tasmota_rf_manager.js + tasmota_rf_device.js: addListener(code, fn.bind(this)) / removeListener(code, fn.bind(this)) use a new bound function each time, so removeListener never actually removes the original listener -> listener leak on node close/redeploy
  - tasmota_manager.js: _spawnDecodeConfig() spawns 'python' with no 'error' handler and no check whether python/python3 is installed -> unhandled error event / unclear failure for users
  - tasmota_shutter.js: onSend() branches on `this.shutter.position` to show a green "Open"/"Closed" status at the 0%/100% end stops, but the Shutter class (tasmota_device.js) only ever sets `this.data.Position` - `.position` is always undefined, so the green status is never shown, only the grey "N%" fallback, even fully open/closed. Test: tasmota_shutter_spec.js.
  - tasmota_manager.js: getDbDevices() does `this.dbDevices['devices'].filter(...)` unconditionally, but DbBase#load() leaves `data = {}` (no `.devices` key) when the backing JSON file doesn't exist yet - throws a TypeError on a brand-new install before devices.json has ever been downloaded/created, instead of returning an empty list. Test: tasmota_manager_spec.js.
@@ -37,6 +34,9 @@ v2.2.0
  - Fixed: tasmota-light no longer silently accepts invalid/malformed input without a warning
  - Fixed: a device could throw and stop processing incoming messages when telemetry arrived before any node had subscribed to it (e.g. an RF-only setup with no sensor node)
  - Fixed: a tasmota-device node added to an already-running flow (partial redeploy) could stay stuck showing offline and never receive any MQTT data
+ - Fixed: repeated redeploys of a flow with tasmota-rf-manager/tasmota-rf-device could leak listeners, eventually causing received RF codes to be processed multiple times
+ - Fixed: tasmota-rf-manager could crash when looking up timing data for a bridge/device combination it hadn't seen yet
+ - Fixed: tasmota-rf-device could crash on startup if its configured RF manager reference was stale or missing
 -------------------
 v1.0.4
 -------------------

@@ -6,7 +6,8 @@ module.exports = function (RED) {
       RED.nodes.createNode(this, config)
       this.config = config
       this.manager = config.manager && RED.nodes.getNode(config.manager)
-      this.manager?.addListener('rf-received', this._onRfReceived.bind(this))
+      this._boundOnRfReceived = this._onRfReceived.bind(this)
+      this.manager?.addListener('rf-received', this._boundOnRfReceived)
       this.defaultBridge = ''
       this.debounce = parseInt(config.debounce) || 0 // 1s
       this.rf433Data = this.manager?.getRf433Codes()
@@ -15,7 +16,7 @@ module.exports = function (RED) {
       this.lastTimes = {}
 
       this.on('close', (done) => {
-        this.manager?.removeListener('rf-received', this._onRfReceived.bind(this))
+        this.manager?.removeListener('rf-received', this._boundOnRfReceived)
         done()
       })
     }
@@ -71,7 +72,9 @@ module.exports = function (RED) {
     }
 
     getTimings (group, name) {
-      return (this.manager && this.rf433Data[group].find(row => (row.name === name)).timings) || {}
+      if (!this.manager) return {}
+      const device = this.rf433Data[group]?.find(row => (row.name === name))
+      return device?.timings || {}
     }
 
     saveTimings (group, name, timings) {
@@ -80,8 +83,9 @@ module.exports = function (RED) {
       const timingsEqual = (bridge1, bridge2) => {
         return (bridge1.Sync === bridge2.Sync) && (bridge1.Low === bridge2.Low) && (bridge1.High === bridge2.High)
       }
-      // device must exists after saveCodes called
-      const device = this.rf433Data[group].find(row => (row.name === name))
+      // device must exist after saveCodes called - but guard anyway in case it wasn't
+      const device = this.rf433Data[group]?.find(row => (row.name === name))
+      if (!device) return
       device.timings = device.timings || {}
       for (const bridge in timings) {
         if (!device.timings[bridge] || !timingsEqual(device.timings[bridge], timings[bridge])) {

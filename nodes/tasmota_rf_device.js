@@ -9,14 +9,15 @@ module.exports = function (RED) {
       this.config = config
       this.codes = (config.codes && JSON.parse(config.codes)) || {}
       const manager = config.manager && RED.nodes.getNode(config.manager)
+      this._boundOnRfReceive = this._onRfReceive.bind(this)
       if (manager) {
         manager.saveCodes(config.group, config.name, this.codes)
-        for (const code in this.codes) manager.addListener(code, this._onRfReceive.bind(this))
+        for (const code in this.codes) manager.addListener(code, this._boundOnRfReceive)
       }
       this.timings = manager?.getTimings(config.group, config.name) || {}
       this.bridgeDevice = config.bridge && RED.nodes.getNode(config.bridge)
       const bridgeTopic = this.bridgeDevice?.config.device
-      this.lastBridge = bridgeTopic || manager.defaultBridge || ''
+      this.lastBridge = bridgeTopic || manager?.defaultBridge || ''
 
       this.on('input', (msg, send, done) => {
         if (!this.config.canReceive) return
@@ -34,7 +35,7 @@ module.exports = function (RED) {
       // Deregister from DeviceNode when this node is deleted or restarted
       this.on('close', (done) => {
         if (manager) {
-          for (const code in this.codes) manager.removeListener(code, this._onRfReceive.bind(this))
+          for (const code in this.codes) manager.removeListener(code, this._boundOnRfReceive)
           if (config.canReceive) manager.saveTimings(config.group, config.name, this.timings)
         }
         done()

@@ -61,11 +61,7 @@ describe('tasmota-rf-manager node', function () {
     assert.deepStrictEqual(timings, { bridge1: { Sync: 1, Low: 2, High: 3 } })
   })
 
-  it('removes its rf-received listener from the manager on close (KNOWN BUG, see CHANGELOG)', async function () {
-    // close() calls manager.removeListener('rf-received', this._onRfReceived.bind(this))
-    // with a *freshly bound* function - a different reference than the one
-    // passed to addListener() in the constructor - so the original listener
-    // is never actually removed and leaks across redeploys/restarts.
+  it('removes its rf-received listener from the manager on close', async function () {
     await helper.load([fakeManagerModule, rfManagerNodeModule], baseFlow())
     const n1 = helper.getNode('n1')
     assert.strictEqual(n1.listenerCount('rf-received'), 1)
