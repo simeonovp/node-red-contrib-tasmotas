@@ -170,6 +170,7 @@ module.exports = function (RED) {
     register (deviceNode) {
       if (!this.client) this._connect()
       this.users[deviceNode.id] = deviceNode
+      if (this.connected) deviceNode.onBrokerOnline()
     }
 
     /* DeRegister a previously registered TasmotaNode */

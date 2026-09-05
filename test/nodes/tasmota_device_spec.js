@@ -106,12 +106,10 @@ describe('tasmota-device node', function () {
     await closeClient(client)
   })
 
-  it('creates one distinct Power switch per shutter half (KNOWN BUG, see CHANGELOG)', async function () {
+  it('creates one distinct Power switch per shutter half', async function () {
     // A tasmota-shutter node with idx N internally drives two relays/switches
     // (idx*2 and idx*2+1) through the Shutter helper class in
-    // nodes/tasmota_device.js. Its constructor currently assigns
-    // `this.switch1` twice by copy/paste instead of setting `this.switch2`
-    // for the second one, so the first switch reference is lost.
+    // nodes/tasmota_device.js.
     const flow = [
       mqttBrokerConfig('n1', broker.port),
       deviceConfig('n2', 'n1', 'shutter01')

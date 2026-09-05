@@ -50,10 +50,7 @@ describe('tasmota-light node', function () {
     await closeClient(client)
   })
 
-  it('publishes a CT command for a mired-range ct input (KNOWN BUG, see CHANGELOG)', async function () {
-    // onNodeInput() does `this.mqttCommand('CT', ct.toString())` for the
-    // 153-500 (mired) branch, but `ct` is never defined there (it should be
-    // `data.ct`) - this throws a ReferenceError instead of publishing.
+  it('publishes a CT command for a mired-range ct input', async function () {
     const flow = baseFlow('lt02')
     await helper.load([brokerNodeModule, deviceNodeModule, lightNodeModule], flow)
     const n3 = helper.getNode('n3')
@@ -68,11 +65,7 @@ describe('tasmota-light node', function () {
     await closeClient(client)
   })
 
-  it('reads the per-key value from an object payload (KNOWN BUG, see CHANGELOG)', async function () {
-    // onNodeInput() MODE 3 (object payload) iterates Object.entries(msg.payload)
-    // but calls processCmd(key) without first setting msg.payload = value, so
-    // every key ends up reading the *whole* payload object instead of its own
-    // value - `{bright: 50}` never results in a `Dimmer 50` command.
+  it('reads the per-key value from an object payload', async function () {
     const flow = baseFlow('lt03')
     await helper.load([brokerNodeModule, deviceNodeModule, lightNodeModule], flow)
     const n3 = helper.getNode('n3')

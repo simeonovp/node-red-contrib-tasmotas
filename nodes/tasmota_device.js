@@ -196,8 +196,8 @@ module.exports = function (RED) {
       this.switch1 = device.switches[idx1] || new Power(device, idx1)
       device.switches[idx1] = this.switch1
       const idx2 = idx1 + 1
-      this.switch1 = device.switches[idx2] || new Power(device, idx2)
-      device.switches[idx2] = this.switch1
+      this.switch2 = device.switches[idx2] || new Power(device, idx2)
+      device.switches[idx2] = this.switch2
 
       // tasmota/t1_02/tele/SENSOR = {"Time":"2022-12-26T09:07:46","Shutter1":{"Position":100,"Direction":0,"Target":100}}
       device.mqttSubscribeTele(device, 'SENSOR', this.onMqttState.bind(this))
@@ -473,7 +473,7 @@ module.exports = function (RED) {
       else {
         // regiter tele subGroup on demand
         if (!this.subGroups.cmnd && topic.includes(this.config.cmndPrefix)) return this.mqttSubscribeCmnd(this, 'STATUS')
-        if (!this.subGroups.tele && topic.includes(this.config.telePrefix)) return this.mqttSubscribeTete(this)
+        if (!this.subGroups.tele && topic.includes(this.config.telePrefix)) return this.mqttSubscribeTele(this)
         if (topic.includes(this.config.telePrefix) || topic.includes(this.config.cmndPrefix) ||
           topic.includes('STATUS') || topic.includes('RESULT')) return
         this.warn(`_onMqttMessage topic:${topic}, subGroups:${JSON.stringify(this.subGroups)}`)
