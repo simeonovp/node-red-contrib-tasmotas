@@ -44,10 +44,11 @@
     }
   },
   "dependencies": {
-    "child_process": "^1.0.2",
-    "fs-extra": "10.0.0",
-    "mqtt": "4.2.6",
-    "request": "^2.88.2"
+    "fs-extra": "^11.4.0",
+    "mqtt": "^5.15.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "devDependencies": {
     "aedes": "^1.1.2",

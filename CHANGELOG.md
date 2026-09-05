@@ -2,13 +2,6 @@ TODOs:
 -------------------
 Code review findings (2026-09-04)
 -------------------
-Dependencies (outdated / risky):
- - "child_process": "^1.0.2" listed as an npm dependency, but child_process is a Node core module - this pulls in an unnecessary/confusing package, should just be removed
- - "request" is deprecated since 2020 (no more updates, known vulnerable transitive deps like tough-cookie) - migrate to native fetch (Node >=18) or undici
- - "mqtt": "4.2.6" pinned to an old major version (5.x available) - review breaking changes and update
- - "fs-extra": "10.0.0" pinned old, no reason not to allow newer versions
- - no "engines" field to declare minimum supported Node.js / Node-RED version, even though the code relies on modern syntax (optional chaining, nullish-ish patterns)
-
 Code quality / maintainability:
  - mix of callback-style done()/send() and async/await/Promises across nodes (tasmota_config.js, tasmota_manager.js) - inconsistent error propagation (some catch blocks swallow err instead of calling done(err)). Left for a behavioral-fix pass since resolving it means deciding a consistent error-handling pattern per call site, not a mechanical change.
 
@@ -34,6 +27,8 @@ v2.2.0
  - Fixed: tasmota-manager could crash listing devices before the device database had been downloaded for the first time
  - Fixed: tasmota-manager could crash the whole runtime if python was not installed/on PATH when downloading a device config
  - Fixed: tasmota-shutter never showed the green Open/Closed status at the fully open/closed positions, always showing the grey percentage instead
+ - Removed the deprecated `request` HTTP library (unmaintained since 2020, known vulnerable transitive dependencies) in favor of Node's built-in fetch
+ - Updated the MQTT client library (mqtt) to the current major version (v5)
 -------------------
 v1.0.4
 -------------------

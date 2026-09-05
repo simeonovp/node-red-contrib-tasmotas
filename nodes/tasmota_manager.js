@@ -1,7 +1,6 @@
 const path = require('path')
 const fs = require('fs')
 const fsx = require('fs-extra')
-const request = require('request')
 const spawn = require('child_process').spawn
 
 const events = require('events')
@@ -70,36 +69,34 @@ module.exports = function (RED) {
       }
     }
 
-    download (skipIfSame = false) {
+    async download (skipIfSame = false) {
       const url = this.config.url
       if (!url) return
       if (this.downloadPending) return
       this.downloadPending = true
-      return new Promise((resolve, reject) => {
-        request(url, { json: true }, (err, resp, data) => {
-          if (err || (resp && resp.statusCode >= 400) || !data) {
-            console.warn('Failed to get ' + url)
-            reject(err || resp.statusCode)
-            this.downloadPending = false
-            return
-          }
+      try {
+        const resp = await fetch(url)
+        const data = resp.ok ? await resp.json() : undefined
+        if (!resp.ok || !data) {
+          console.warn('Failed to get ' + url)
+          throw new Error(`HTTP ${resp.status}`)
+        }
 
-          const json = JSON.stringify(data, null, 2)
-          const manifest = this.manifest?.data
-          const length = (manifest && manifest[url]?.length) || 0
-          const hash = (manifest && manifest[url]?.hash) || 0
-          if (skipIfSame && length && json.length && (length === json.length) && (hash === this.hashCode(json))) {
-            resolve()
-            this.downloadPending = false
-            return
-          }
+        const json = JSON.stringify(data, null, 2)
+        const manifest = this.manifest?.data
+        const length = (manifest && manifest[url]?.length) || 0
+        const hash = (manifest && manifest[url]?.hash) || 0
+        if (skipIfSame && length && json.length && (length === json.length) && (hash === this.hashCode(json))) {
+          return
+        }
 
-          this.data = data
-          this.updateManifest(url, json)
-          resolve(json)
-          this.downloadPending = false
-        })
-      })
+        this.data = data
+        this.updateManifest(url, json)
+        return json
+      }
+      finally {
+        this.downloadPending = false
+      }
     }
 
     hashCode (string) {
@@ -264,11 +261,6 @@ module.exports = function (RED) {
       if (!hws) return this.error('No hardware table in DB')
 
       const urlDir = new URL('../img/', this.config.dbUri).href
-      // const download = (uri, filename, callback) => {
-      //   request.head(uri, (err, res, body) => {
-      //     request(uri).pipe(fs.createWriteStream(filename)).on('close', callback)
-      //   })
-      // }
       const saveIconFromUrl = async (url, iconPath) => {
         this.log(`Download icon from url ${url} to ${iconPath}`)
         try {
@@ -551,18 +543,21 @@ module.exports = function (RED) {
       return this.dbDevices.devices.filter((el) => el.fw)
     }
 
-    getRequest (url, json, timeout) {
-      return new Promise((resolve, reject) => {
-        request(url, { json, timeout }, (err, resp, data) => {
-          if (err || (resp && resp.statusCode >= 400) || !data) {
-            console.warn('Failed to get ' + url)
-            reject(err || resp.statusCode)
-            this.downloadPending = false
-            return
-          }
-          resolve(data)
-        })
-      })
+    async getRequest (url, json, timeout) {
+      const controller = timeout ? new AbortController() : undefined
+      const timer = timeout ? setTimeout(() => controller.abort(), timeout) : undefined
+      try {
+        const resp = await fetch(url, { signal: controller?.signal })
+        const data = resp.ok ? await (json ? resp.json() : resp.text()) : undefined
+        if (!resp.ok || !data) {
+          console.warn('Failed to get ' + url)
+          throw new Error(`HTTP ${resp.status}`)
+        }
+        return data
+      }
+      finally {
+        if (timer) clearTimeout(timer)
+      }
     }
 
     mqttCommand (device, command, payload) {
