@@ -463,6 +463,18 @@ module.exports = function (RED) {
       delete this.devices[device.id]
     }
 
+    // Summary of every tasmota-device node currently registered with this
+    // manager, for the editor's "Devices" tab (name/status/ap/ip).
+    listRegisteredDevices () {
+      return Object.values(this.devices).map((device) => ({
+        id: device.id,
+        name: device.config?.name || device.config?.device || device.id,
+        online: !!device.isOnline,
+        ap: device.ap || '',
+        ip: device.config?.ip || ''
+      }))
+    }
+
     _addDbDevice (config) {
       const db = this.devicesDb?.data || {}
       this.devicesDb.data = db
@@ -574,4 +586,13 @@ module.exports = function (RED) {
   }
 
   RED.nodes.registerType('tasmota-manager', TasmotaManager)
+
+  RED.httpAdmin.get('/tasmota-manager/:id/devices', RED.auth.needsPermission('tasmota-manager.read'), function (req, res) {
+    const node = RED.nodes.getNode(req.params.id)
+    if (!node || node.type !== 'tasmota-manager') {
+      res.sendStatus(404)
+      return
+    }
+    res.json(node.listRegisteredDevices())
+  })
 }

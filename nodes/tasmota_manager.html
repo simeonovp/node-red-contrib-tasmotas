@@ -1,22 +1,44 @@
 <script type="text/html" data-template-name="tasmota-manager">
   <div class="form-row">
-    <label for="node-config-input-dbUri"><i class="fa fa-tag"></i> DB uri</label>
-    <input type="text" id="node-config-input-dbUri">
+    <ul id="node-config-input-tasmota-tabs"></ul>
   </div>
-  <div class="form-row">
-    <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
-    <input type="text" id="node-config-input-name" placeholder="Name">
-  </div>
-  <hr>
-  <div class="form-row">
-    <label for="node-config-input-network"><i class="fa fa-tag"></i> Network</label>
-    <input type="text" id="node-config-input-network" placeholder="192.168.1.0/24">
-  </div>
-  <div class="form-row">
-    <label for="tasmota-upgrade-devices"><i class="fa fa-tag"></i> Upgrade devices</label>
-    <button type="button" id="tasmota-upgrade-devices" class="red-ui-button">
-      <i class="fa fa-refresh"></i>
-    </button>
+  <div id="node-config-input-tabs-content">
+    <div id="tasmota-manager-settings-tab" style="display:none">
+      <div class="form-row">
+        <label for="node-config-input-dbUri"><i class="fa fa-tag"></i> DB uri</label>
+        <input type="text" id="node-config-input-dbUri">
+      </div>
+      <div class="form-row">
+        <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-config-input-name" placeholder="Name">
+      </div>
+      <hr>
+      <div class="form-row">
+        <label for="node-config-input-network"><i class="fa fa-tag"></i> Network</label>
+        <input type="text" id="node-config-input-network" placeholder="192.168.1.0/24">
+      </div>
+      <div class="form-row">
+        <label for="tasmota-upgrade-devices"><i class="fa fa-tag"></i> Upgrade devices</label>
+        <button type="button" id="tasmota-upgrade-devices" class="red-ui-button">
+          <i class="fa fa-refresh"></i>
+        </button>
+      </div>
+    </div>
+    <div id="tasmota-manager-devices-tab" style="display:none">
+      <div class="form-row">
+        <button type="button" id="tasmota-manager-devices-refresh" class="red-ui-button">
+          <i class="fa fa-refresh"></i> Refresh
+        </button>
+      </div>
+      <div class="form-row">
+        <table id="tasmota-manager-devices-table" style="width:100%">
+          <thead>
+            <tr><th>Name</th><th>Status</th><th>AP</th><th>IP</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </script>
 
@@ -24,6 +46,9 @@
   <p>A configuration node to manage multiple device running the <b>Tasmota</b> firmware.</p>
   <p><b>DB uri</b> is optional parametr to define the location of the resource server if available.</p>
   <p>Parameter <b>Networ</b> can be used to scan for new Tasmota devices.</p>
+  <p>The <b>Devices</b> tab lists every tasmota-device node currently registered with this
+    manager, along with its current online/offline status, WiFi access point and IP address.
+    It only reflects devices from a deployed flow - use <i>Refresh</i> to update it.</p>
 </script>
 
 <script type="text/javascript">
@@ -68,6 +93,46 @@
       return this.name || 'Manager'
     },
     oneditprepare: function () {
+      const node = this
+
+      const renderDevicesTable = () => {
+        const $tbody = $('#tasmota-manager-devices-table tbody')
+        $tbody.empty()
+        $.getJSON('tasmota-manager/' + node.id + '/devices')
+          .done((devices) => {
+            if (!devices.length) {
+              $tbody.append('<tr><td colspan="4"><i>No devices registered</i></td></tr>')
+              return
+            }
+            devices.forEach((d) => {
+              const $row = $('<tr>')
+              $row.append($('<td>').text(d.name))
+              $row.append($('<td>')
+                .append($('<span>').css('color', d.online ? '#3fad46' : '#d32f2f').html('&#9679; '))
+                .append(document.createTextNode(d.online ? 'online' : 'offline')))
+              $row.append($('<td>').text(d.ap || '-'))
+              $row.append($('<td>').text(d.ip || '-'))
+              $tbody.append($row)
+            })
+          })
+          .fail(() => {
+            $tbody.append('<tr><td colspan="4"><i>Deploy the flow to see registered devices</i></td></tr>')
+          })
+      }
+
+      const tabs = RED.tabs.create({
+        id: 'node-config-input-tasmota-tabs',
+        onchange: function (tab) {
+          $('#node-config-input-tabs-content').children().hide()
+          $('#' + tab.id).show()
+          if (tab.id === 'tasmota-manager-devices-tab') renderDevicesTable()
+        }
+      })
+      tabs.addTab({ id: 'tasmota-manager-settings-tab', label: 'Settings' })
+      tabs.addTab({ id: 'tasmota-manager-devices-tab', label: 'Devices' })
+
+      $('#tasmota-manager-devices-refresh').click(renderDevicesTable)
+
       const upgradeDevice = (dev, _def) => {
         const y = { id: dev.id, _def, type: dev.type, z: dev.z || '', users: dev.users || [] }
         for (let o in y, _def.defaults) {
@@ -86,7 +151,7 @@
         const type = 'tasmota-device'
         const _def = RED.nodes.getType(type)
         if (!_def) return console.error(`Config node type '${type}' not registered`)
-        RED.nodes.eachConfig(n => { 
+        RED.nodes.eachConfig(n => {
           if (n.type !== 'tasmota-device') return
           for (const o in _def.defaults) { // look for missing deaults element
             if (n[o] === undefined) {

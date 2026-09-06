@@ -1,5 +1,8 @@
 # TODOs:
 
+# v2.2.1
+ - Added: new "Devices" tab in the tasmota-manager editor, listing every currently registered device with its name, online/offline status, WiFi access point and IP address
+
 # v2.2.0
  - Fixed: tasmota-device and tasmota-manager nodes failed to load entirely (missing dependency)
  - Fixed: tasmota-light rejected color temperature (CT) values in the 153-500 range instead of sending them

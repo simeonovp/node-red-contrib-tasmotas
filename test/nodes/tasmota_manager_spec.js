@@ -70,4 +70,44 @@ describe('tasmota-manager node', function () {
     assert.strictEqual(devices[0].ip, '10.0.0.5')
     assert.strictEqual(devices[0].host, 'plug1')
   })
+
+  it('listRegisteredDevices() summarizes name/status/ap/ip of each registered device node', async function () {
+    const name = uniqueName('listregistered')
+    const flow = [managerConfig('n1', { name })]
+    await helper.load(managerNodeModule, flow)
+    const n1 = helper.getNode('n1')
+
+    n1.registerDevice({ id: 'dev1', isOnline: true, ap: 'ap-livingroom', config: { name: 'Plug 1', ip: '10.0.0.5' } })
+    n1.registerDevice({ id: 'dev2', isOnline: false, ap: '', config: { device: 'plug2', ip: '' } })
+
+    assert.deepStrictEqual(n1.listRegisteredDevices(), [
+      { id: 'dev1', name: 'Plug 1', online: true, ap: 'ap-livingroom', ip: '10.0.0.5' },
+      { id: 'dev2', name: 'plug2', online: false, ap: '', ip: '' }
+    ])
+  })
+
+  it('exposes the registered devices over the editor admin API (GET /tasmota-manager/:id/devices)', async function () {
+    const name = uniqueName('adminapi')
+    const flow = [managerConfig('n1', { name })]
+    await helper.load(managerNodeModule, flow)
+    const n1 = helper.getNode('n1')
+    n1.registerDevice({ id: 'dev1', isOnline: true, ap: 'ap1', config: { name: 'Plug 1', ip: '10.0.0.5' } })
+
+    const res = await helper.request().get('/tasmota-manager/n1/devices')
+
+    assert.strictEqual(res.status, 200)
+    assert.deepStrictEqual(res.body, [
+      { id: 'dev1', name: 'Plug 1', online: true, ap: 'ap1', ip: '10.0.0.5' }
+    ])
+  })
+
+  it('returns 404 from the admin API for an unknown/non-manager id', async function () {
+    const name = uniqueName('adminapi404')
+    const flow = [managerConfig('n1', { name })]
+    await helper.load(managerNodeModule, flow)
+
+    const res = await helper.request().get('/tasmota-manager/does-not-exist/devices')
+
+    assert.strictEqual(res.status, 404)
+  })
 })
