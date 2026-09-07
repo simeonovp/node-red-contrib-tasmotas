@@ -18,6 +18,14 @@
         <input type="text" id="node-config-input-network" placeholder="192.168.1.0/24">
       </div>
       <div class="form-row">
+        <label for="node-config-input-ssid"><i class="fa fa-wifi"></i> SSID</label>
+        <input type="text" id="node-config-input-ssid" placeholder="fallback WiFi SSID for recovery commands">
+      </div>
+      <div class="form-row">
+        <label for="node-config-input-password"><i class="fa fa-key"></i> Password</label>
+        <input type="password" id="node-config-input-password" placeholder="fallback WiFi password for recovery commands">
+      </div>
+      <div class="form-row">
         <label for="tasmota-upgrade-devices"><i class="fa fa-tag"></i> Upgrade devices</label>
         <button type="button" id="tasmota-upgrade-devices" class="red-ui-button">
           <i class="fa fa-refresh"></i>
@@ -31,9 +39,14 @@
         </button>
       </div>
       <div class="form-row">
-        <table id="tasmota-manager-devices-table" style="width:100%">
+        <table id="tasmota-manager-devices-table" style="width:100%; border-collapse:collapse; table-layout:fixed">
           <thead>
-            <tr><th>Name</th><th>Status</th><th>AP</th><th>IP</th></tr>
+            <tr>
+              <th style="width:35%; text-align:left; padding:4px 8px">Name</th>
+              <th style="width:20%; text-align:left; padding:4px 8px">Status</th>
+              <th style="width:20%; text-align:left; padding:4px 8px">AP</th>
+              <th style="width:25%; text-align:left; padding:4px 8px">IP</th>
+            </tr>
           </thead>
           <tbody></tbody>
         </table>
@@ -57,7 +70,9 @@
     defaults: {
       dbUri: { value: ''},
       name: { value: '', required: true },
-      network: { value: '' }
+      network: { value: '' },
+      ssid: { value: '' },
+      password: { value: '' }
     },
     label: function() {
       // use label callback to perform init
@@ -98,25 +113,27 @@
       const renderDevicesTable = () => {
         const $tbody = $('#tasmota-manager-devices-table tbody')
         $tbody.empty()
+        const cellStyle = 'text-align:left; padding:4px 8px'
+        const $cell = () => $('<td>').css('cssText', cellStyle)
         $.getJSON('tasmota-manager/' + node.id + '/devices')
           .done((devices) => {
             if (!devices.length) {
-              $tbody.append('<tr><td colspan="4"><i>No devices registered</i></td></tr>')
+              $tbody.append($('<tr>').append($cell().attr('colspan', 4).append($('<i>').text('No devices registered'))))
               return
             }
             devices.forEach((d) => {
               const $row = $('<tr>')
-              $row.append($('<td>').text(d.name))
-              $row.append($('<td>')
+              $row.append($cell().text(d.name))
+              $row.append($cell()
                 .append($('<span>').css('color', d.online ? '#3fad46' : '#d32f2f').html('&#9679; '))
                 .append(document.createTextNode(d.online ? 'online' : 'offline')))
-              $row.append($('<td>').text(d.ap || '-'))
-              $row.append($('<td>').text(d.ip || '-'))
+              $row.append($cell().text(d.ap || '-'))
+              $row.append($cell().text(d.ip || '-'))
               $tbody.append($row)
             })
           })
           .fail(() => {
-            $tbody.append('<tr><td colspan="4"><i>Deploy the flow to see registered devices</i></td></tr>')
+            $tbody.append($('<tr>').append($cell().attr('colspan', 4).append($('<i>').text('Deploy the flow to see registered devices'))))
           })
       }
 

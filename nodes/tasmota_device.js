@@ -313,19 +313,21 @@ module.exports = function (RED) {
 
     async downloadConfig (force = false) {
       // .node-red\projects\node-red-contrib-tasmotas\resources\<project>\configs
-      if (!this.manager || !this.config.ip) return
-      try {
-        this.deviceConfig = await this.manager.downloadConfig(this.config.ip, force)
-        if (!this.deviceConfig) return
-        if (this.deviceConfig.mqtt_host !== this.brokerNode?.config.broker) {
-          this.warn(`Force download device config due to different MQTT broker (${this.deviceConfig.mqtt_host} != ${this.brokerNode?.config.broker})`)
-          this.deviceConfig = await this.manager.downloadConfig(this.config.ip, true)
-          if (!this.deviceConfig) return
+      if (this.manager && this.config.ip) {
+        try {
+          this.deviceConfig = await this.manager.downloadConfig(this.config.ip, force)
+          if (this.deviceConfig && (this.deviceConfig.mqtt_host !== this.brokerNode?.config.broker)) {
+            this.warn(`Force download device config due to different MQTT broker (${this.deviceConfig.mqtt_host} != ${this.brokerNode?.config.broker})`)
+            this.deviceConfig = await this.manager.downloadConfig(this.config.ip, true)
+          }
+        }
+        catch (err) {
+          this.error(err)
         }
       }
-      catch (err) {
-        this.error(err)
-      }
+      // Always request STATUS 11 (WiFi/BSSID info) - it must not depend on
+      // the separate, often-unconfigured device-config download above
+      // (decode-config.py needs python + a reachable device, dbUri, ...).
       this.mqttCommand('STATUS', '11')
     }
 
@@ -363,7 +365,6 @@ module.exports = function (RED) {
     }
 
     _regsterAtBroker () {
-      this.brokerNode.register(this)
       this.isOnline = false
 
       // Subscribe to device availability changes  tele/<device>/LWT
@@ -376,6 +377,8 @@ module.exports = function (RED) {
           this.onDeviceOffline()
         }
       })
+
+      this.brokerNode.register(this)
     }
 
     _deregsterAtBroker () {

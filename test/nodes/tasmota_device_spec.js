@@ -79,6 +79,75 @@ describe('tasmota-device node', function () {
     await closeClient(client)
   })
 
+  it('still requests STATUS 11 (WiFi/BSSID) even when the manager device-config download fails', async function () {
+    // Regression: downloadConfig() used to `return` early whenever
+    // manager.downloadConfig() came back falsy (e.g. decode-config.py/python
+    // not available, or no dbUri configured - a very common setup), which
+    // skipped the unconditional `mqttCommand('STATUS', '11')` at the end of
+    // the function too. That STATUS 11 request is how a device's WiFi AP
+    // (BSSID) gets discovered, so a failed/unconfigured device-config
+    // download silently broke AP tracking for everyone without it set up.
+    function fakeManagerModule (RED) {
+      function FakeManager (config) {
+        RED.nodes.createNode(this, config)
+      }
+      FakeManager.prototype.registerDevice = function () {}
+      FakeManager.prototype.unregisterDevice = function () {}
+      FakeManager.prototype.downloadConfig = async function () { return undefined }
+      RED.nodes.registerType('fake-manager-for-device', FakeManager)
+    }
+
+    const flow = [
+      mqttBrokerConfig('n1', broker.port),
+      { id: 'n0', type: 'fake-manager-for-device' },
+      deviceConfig('n2', 'n1', 'plug07', { manager: 'n0', ip: '10.0.0.9' })
+    ]
+    await helper.load([brokerNodeModule, deviceNodeModule, fakeManagerModule], flow)
+    const device = helper.getNode('n2')
+    registerFakeLeaf(device)
+    await waitUntil(() => device.brokerNode.connected === true)
+
+    const client = connectClient(broker.port)
+    await new Promise((resolve) => client.on('connect', resolve))
+    const cmndMessages = await collectMessages(client, 'cmnd/plug07/#')
+
+    await publishLwt(client, 'plug07', true)
+
+    await waitUntil(() => cmndMessages.some((m) => m.topic === 'cmnd/plug07/STATUS' && m.payload === '11'))
+
+    await closeClient(client)
+  })
+
+  it('still subscribes and goes online when the broker is already connected before the first leaf registers', async function () {
+    // Regression: brokerNode.register() synchronously calls onBrokerOnline()
+    // when the broker is already connected. onBrokerOnline() only performs
+    // the real MQTT-level subscribe if this.subGroups already exists, so
+    // register() must run *after* the device's own mqttSubscribeTele('LWT')
+    // call inside _regsterAtBroker() - otherwise the device never actually
+    // subscribes to anything and stays offline forever. This only shows up
+    // when a leaf node registers *after* the broker connection is already
+    // established (e.g. many nodes on a slow device, or a late redeploy),
+    // which is why the earlier fix for the "late registration" bug shipped
+    // without this being caught.
+    const flow = [
+      mqttBrokerConfig('n1', broker.port),
+      deviceConfig('n2', 'n1', 'plug06')
+    ]
+    await helper.load([brokerNodeModule, deviceNodeModule], flow)
+    const device = helper.getNode('n2')
+
+    await waitUntil(() => device.brokerNode.connected === true)
+    registerFakeLeaf(device)
+
+    const client = connectClient(broker.port)
+    await new Promise((resolve) => client.on('connect', resolve))
+    await publishLwt(client, 'plug06', true)
+
+    await waitUntil(() => device.isOnline === true)
+
+    await closeClient(client)
+  })
+
   it('routes an incoming stat/<device>/RESULT message to the right subscriber only', async function () {
     const flow = [
       mqttBrokerConfig('n1', broker.port),

@@ -2,6 +2,10 @@
 
 # v2.2.1
  - Added: new "Devices" tab in the tasmota-manager editor, listing every currently registered device with its name, online/offline status, WiFi access point and IP address
+ - Fixed: a device could permanently fail to receive any MQTT data (never going online) when its first user registered after the broker connection was already established, instead of only during the initial connect - noticeable with many devices on slower hardware
+ - Fixed: the Devices tab's table columns didn't line up with their headers
+ - Fixed: the Devices tab's AP column was always empty for any access point that isn't itself a tracked device - now falls back to showing its WiFi BSSID/MAC when the hostname can't be resolved
+ - Fixed: a device never requested its WiFi/AP info (STATUS 11) whenever the optional device-config download (requires python + decode-config.py) failed or wasn't set up - very common without a dbUri configured, and silently broke AP tracking for everyone in that situation
 
 # v2.2.0
  - Fixed: tasmota-device and tasmota-manager nodes failed to load entirely (missing dependency)

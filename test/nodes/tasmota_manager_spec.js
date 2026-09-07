@@ -86,6 +86,27 @@ describe('tasmota-manager node', function () {
     ])
   })
 
+  it('listRegisteredDevices() falls back to the AP BSSID only when its hostname could not be resolved', async function () {
+    const name = uniqueName('apfallback')
+    const flow = [managerConfig('n1', { name })]
+    await helper.load(managerNodeModule, flow)
+    const n1 = helper.getNode('n1')
+
+    // ap (hostname) resolved -> takes priority over bssid
+    n1.registerDevice({ id: 'dev1', isOnline: true, ap: 'ap-livingroom', bssid: 'AA:BB:CC:DD:EE:01', config: { name: 'Plug 1' } })
+    // ap not resolved -> falls back to the raw bssid
+    n1.registerDevice({ id: 'dev2', isOnline: true, ap: '', bssid: 'AA:BB:CC:DD:EE:02', config: { name: 'Plug 2' } })
+    // neither known yet -> empty
+    n1.registerDevice({ id: 'dev3', isOnline: false, config: { name: 'Plug 3' } })
+
+    const byId = Object.fromEntries(n1.listRegisteredDevices().map((d) => [d.id, d.ap]))
+    assert.deepStrictEqual(byId, {
+      dev1: 'ap-livingroom',
+      dev2: 'AA:BB:CC:DD:EE:02',
+      dev3: ''
+    })
+  })
+
   it('exposes the registered devices over the editor admin API (GET /tasmota-manager/:id/devices)', async function () {
     const name = uniqueName('adminapi')
     const flow = [managerConfig('n1', { name })]

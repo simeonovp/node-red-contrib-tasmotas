@@ -470,7 +470,7 @@ module.exports = function (RED) {
         id: device.id,
         name: device.config?.name || device.config?.device || device.id,
         online: !!device.isOnline,
-        ap: device.ap || '',
+        ap: device.ap || device.bssid || '',
         ip: device.config?.ip || ''
       }))
     }
@@ -581,6 +581,38 @@ module.exports = function (RED) {
       const command = val ? `${cmnd} ${val}` : cmnd
       const url = `http://${ip}/cm?cmnd=${encodeURIComponent(command)}`
       return await this.getRequest(url, true, timeout)
+    }
+
+    // Build a manual recovery command/URL for a device that fell back to its
+    // Tasmota setup AP (tasmota_XXXXXX-YYYY), to be opened while joined to
+    // that AP. Prefers WiFi/static-IP settings from the device's own cached
+    // decode-config.py dump, falling back to the manager-level ssid/password
+    // for WiFi credentials when no cache (or no credentials in it) exists.
+    buildRecoveryCommand (mac) {
+      const row = this.devicesDb.findTableRaw('devices', 'mac', mac, true)
+      if (!row) return { found: false, mac }
+
+      const mqttTopic = this.mqttMap[row.ip]
+      const filepath = path.join(this.confdir, (mqttTopic || row.ip) + '.json')
+      const config = fs.existsSync(filepath) && JSONparse(fs.readFileSync(filepath, 'utf8'))
+
+      const ssid = config?.sta_ssid?.[0] || this.config.ssid
+      const password = config?.sta_pwd?.[0] || this.config.password
+      const usedFallbackCredentials = !(config?.sta_ssid?.[0] && config?.sta_pwd?.[0])
+
+      const ip = config?.ip_address
+      const hasStaticIp = !!(ip && ip[0] && ip[0] !== '0.0.0.0')
+
+      const parts = [`SSId1 ${ssid}`, `Password1 ${password}`]
+      if (hasStaticIp) {
+        parts.push(`IpAddress1 ${ip[0]}`, `IpAddress2 ${ip[1]}`, `IpAddress3 ${ip[2]}`, `IpAddress4 ${ip[3]}`)
+        if (ip[4]) parts.push(`IpAddress5 ${ip[4]}`)
+      }
+      parts.push('Restart 1')
+      const command = 'Backlog ' + parts.join(';')
+      const url = `http://192.168.4.1/cm?cmnd=${encodeURIComponent(command)}`
+
+      return { found: true, mac, ip: row.ip, host: row.host, command, url, usedFallbackCredentials, hasStaticIp }
     }
     // end commands
   }
