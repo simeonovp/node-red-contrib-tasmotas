@@ -4,6 +4,7 @@ const fsx = require('fs-extra')
 const spawn = require('child_process').spawn
 
 const events = require('events')
+const { NetHelper } = require('./lib/utils.js')
 
 function JSONparse (json) {
   try {
@@ -167,8 +168,13 @@ module.exports = function (RED) {
       this.ev = new events.EventEmitter()
       this.ev.setMaxListeners(0)
 
+      this.lastTasmotaScan = { at: null, results: [] }
+      this._scanTimer = null
+      this._scheduleRecoveryScan()
+
       this.on('close', (done) => {
         if (this.rf433DbDirty) this.rf433Db.save(true)
+        if (this._scanTimer) clearInterval(this._scanTimer)
         done()
       })
 
@@ -583,36 +589,256 @@ module.exports = function (RED) {
       return await this.getRequest(url, true, timeout)
     }
 
+    // Locates a device's cached decode-config.py dump without depending on
+    // this.mqttMap (the legacy ip->mqtt_topic lookup - MQTT is optional in
+    // Tasmota, and that mapping is stale/historical baggage we're moving
+    // away from for new code, not something to build further on). Prefers
+    // the MAC-derived default topic name (Tasmota's own tasmota_%06X
+    // hostname/topic, from the last 3 MAC bytes - the same identifier
+    // NetHelper.findTasmotaAPs() extracts from a fallback-AP SSID), since
+    // that's stable and doesn't depend on the (possibly stale) device DB;
+    // the DB's host/ip are only a fallback, for a manually renamed topic.
+    _findCachedConfigFile (row, mac) {
+      const macSuffix = mac && mac.replace(/[^0-9A-Fa-f]/g, '').slice(-6)
+      const candidates = []
+      if (macSuffix) candidates.push(`tasmota_${macSuffix.toUpperCase()}`, `tasmota_${macSuffix.toLowerCase()}`)
+      if (row?.host) candidates.push(row.host)
+      if (row?.ip) candidates.push(row.ip)
+      for (const base of candidates) {
+        const filepath = path.join(this.confdir, base + '.json')
+        if (fs.existsSync(filepath)) return filepath
+      }
+      return undefined
+    }
+
     // Build a manual recovery command/URL for a device that fell back to its
     // Tasmota setup AP (tasmota_XXXXXX-YYYY), to be opened while joined to
-    // that AP. Prefers WiFi/static-IP settings from the device's own cached
-    // decode-config.py dump, falling back to the manager-level ssid/password
-    // for WiFi credentials when no cache (or no credentials in it) exists.
-    buildRecoveryCommand (mac) {
+    // that AP. Field priority is overrides > the device's own cached
+    // decode-config.py dump > the manager-level ssid/password fallback
+    // (WiFi credentials only - there's no manager-level fallback for
+    // ip/gateway/mask, only cache or an explicit override) - the DB is the
+    // least trustworthy source (can go stale), the cache is read straight
+    // from the device, so it always wins when both exist. `row` may be
+    // missing entirely for a brand-new device (never in the device DB, no
+    // cached config) - that's still a valid case as long as overrides/
+    // manager-fallback supply enough to build a command; `found` means "a
+    // command could be built", not "this MAC was already known".
+    buildRecoveryCommand (mac, overrides = {}) {
       const row = this.devicesDb.findTableRaw('devices', 'mac', mac, true)
-      if (!row) return { found: false, mac }
 
-      const mqttTopic = this.mqttMap[row.ip]
-      const filepath = path.join(this.confdir, (mqttTopic || row.ip) + '.json')
-      const config = fs.existsSync(filepath) && JSONparse(fs.readFileSync(filepath, 'utf8'))
+      const filepath = this._findCachedConfigFile(row, mac)
+      const config = filepath && JSONparse(fs.readFileSync(filepath, 'utf8'))
 
-      const ssid = config?.sta_ssid?.[0] || this.config.ssid
-      const password = config?.sta_pwd?.[0] || this.config.password
-      const usedFallbackCredentials = !(config?.sta_ssid?.[0] && config?.sta_pwd?.[0])
+      const ssid = overrides.ssid || config?.sta_ssid?.[0] || this.config.ssid
+      const password = overrides.password || config?.sta_pwd?.[0] || this.config.password
+      if (!ssid || !password) return { found: false, mac }
+      const usedFallbackCredentials = !((overrides.ssid || config?.sta_ssid?.[0]) && (overrides.password || config?.sta_pwd?.[0]))
 
-      const ip = config?.ip_address
-      const hasStaticIp = !!(ip && ip[0] && ip[0] !== '0.0.0.0')
+      // '0.0.0.0' is Tasmota's placeholder for "not set" in every IpAddress
+      // slot, not just IpAddress1 - filter it out of every field uniformly.
+      const isRealIp = (v) => !!(v && v !== '0.0.0.0')
+      const cachedIp = config?.ip_address || []
+      const ip = overrides.ip || cachedIp[0]
+      const gateway = overrides.gateway || cachedIp[1]
+      const mask = overrides.mask || cachedIp[2]
+      const dns1 = cachedIp[3]
+      const dns2 = cachedIp[4]
+      const hasStaticIp = isRealIp(ip)
 
       const parts = [`SSId1 ${ssid}`, `Password1 ${password}`]
-      if (hasStaticIp) {
-        parts.push(`IpAddress1 ${ip[0]}`, `IpAddress2 ${ip[1]}`, `IpAddress3 ${ip[2]}`, `IpAddress4 ${ip[3]}`)
-        if (ip[4]) parts.push(`IpAddress5 ${ip[4]}`)
-      }
+      if (hasStaticIp) parts.push(`IpAddress1 ${ip}`)
+      if (isRealIp(gateway)) parts.push(`IpAddress2 ${gateway}`)
+      if (isRealIp(mask)) parts.push(`IpAddress3 ${mask}`)
+      if (isRealIp(dns1)) parts.push(`IpAddress4 ${dns1}`)
+      if (isRealIp(dns2)) parts.push(`IpAddress5 ${dns2}`)
       parts.push('Restart 1')
       const command = 'Backlog ' + parts.join(';')
       const url = `http://192.168.4.1/cm?cmnd=${encodeURIComponent(command)}`
 
-      return { found: true, mac, ip: row.ip, host: row.host, command, url, usedFallbackCredentials, hasStaticIp }
+      // ip/host: prefer the cache (read straight from the device) over the
+      // DB row, which can go stale - only fall back to the DB when neither
+      // an override nor the cache had a value.
+      return {
+        found: true,
+        alreadyKnown: !!row,
+        mac,
+        ip: ip || row?.ip,
+        host: config?.hostname || row?.host,
+        command,
+        url,
+        usedFallbackCredentials,
+        hasStaticIp
+      }
+    }
+
+    // Scans for currently visible Tasmota fallback APs (tasmota_XXXXXX-YYYY).
+    // Shares the wifiBusy guard with recoveryDevice() - both touch the same
+    // WiFi radio and must not run concurrently.
+    async findTasmotaAPs (iface) {
+      if (this.wifiBusy) throw new Error('findTasmotaAPs: a WiFi scan/recovery is already in progress')
+      this.wifiBusy = true
+      try {
+        const networks = await NetHelper.scanWifiNetworks(iface || this.config.wifiInterface || 'wlan0')
+        return NetHelper.findTasmotaAPs(networks)
+      }
+      finally {
+        this.wifiBusy = false
+      }
+    }
+
+    // Flags each found AP as belonging to an already-known device (matched
+    // by the last 3 MAC bytes encoded in the SSID) - lets the editor warn
+    // before recovering an AP that might not even be one of your own
+    // devices, without blocking recovery of a genuinely new/unknown one.
+    _enrichTasmotaAPs (aps) {
+      const devices = this.devicesDb?.data?.devices || []
+      // Strip separators before comparing - MACs in the DB are normally
+      // colon-separated ("AA:BB:CC:DD:EE:FF"), but ap.macSuffix (from the
+      // SSID) is 6 bare hex chars with no separators.
+      const hexOnly = (mac) => mac.toUpperCase().replace(/[^0-9A-F]/g, '')
+      return aps.map((ap) => {
+        const match = devices.find((d) => d.mac && hexOnly(d.mac).endsWith(ap.macSuffix))
+        return { ...ap, known: !!match, deviceName: match?.name, deviceIp: match?.ip }
+      })
+    }
+
+    // findTasmotaAPs() + known/unknown enrichment, cached on this.lastTasmotaScan
+    // for the editor's Assistants tab (GET .../tasmota-aps) and the scheduled
+    // re-scan below - both share this single cache.
+    async scanTasmotaAPs (iface) {
+      const results = this._enrichTasmotaAPs(await this.findTasmotaAPs(iface))
+      this.lastTasmotaScan = { at: new Date().toISOString(), results }
+      return this.lastTasmotaScan
+    }
+
+    // (Re)schedules the periodic Tasmota-AP scan per recoveryScanRepeatHours
+    // (0/unset = disabled). findTasmotaAPs() already no-ops via wifiBusy if a
+    // manual scan/recovery is in progress, so a skipped tick just waits for
+    // the next interval.
+    _scheduleRecoveryScan () {
+      if (this._scanTimer) {
+        clearInterval(this._scanTimer)
+        this._scanTimer = null
+      }
+      const hours = Number(this.config.recoveryScanRepeatHours)
+      if (!hours || hours <= 0) return
+      const ms = Math.min(hours * 3600000, 2147483647) // setInterval's 32-bit ms cap (~24.8 days)
+      this._scanTimer = setInterval(() => {
+        this.scanTasmotaAPs().catch((err) => this.warn(`Scheduled Tasmota AP scan failed: ${err.message}`))
+      }, ms)
+    }
+
+    // Merges override values into a *copy* of a cached decode-config.py dump
+    // (never mutates the original, which is still the on-disk cache) - same
+    // override fields/priority as buildRecoveryCommand(), just applied to
+    // the full config object instead of a handful of Backlog command parts.
+    // No DNS override param exists (same as buildRecoveryCommand) - DNS
+    // stays whatever the cache had.
+    _applyConfigOverrides (config, overrides) {
+      const merged = JSON.parse(JSON.stringify(config))
+      if (overrides.ssid) merged.sta_ssid = [overrides.ssid, merged.sta_ssid?.[1] || '']
+      if (overrides.password) merged.sta_pwd = [overrides.password, merged.sta_pwd?.[1] || '']
+      if (overrides.ip || overrides.gateway || overrides.mask) {
+        const ip = Array.isArray(merged.ip_address) ? merged.ip_address.slice() : []
+        if (overrides.ip) ip[0] = overrides.ip
+        if (overrides.gateway) ip[1] = overrides.gateway
+        if (overrides.mask) ip[2] = overrides.mask
+        merged.ip_address = ip
+      }
+      return merged
+    }
+
+    // Pushes a full config (typically a cached dump, optionally with
+    // overrides merged in via _applyConfigOverrides) back to a device via
+    // decode-config.py's own restore support - not just the handful of
+    // fields buildRecoveryCommand()'s Backlog command covers, but the whole
+    // device config (module/GPIO, relay names, rules, ...). The temp file is
+    // always removed afterward, success or failure.
+    async restoreFullConfig (ip, config) {
+      const tmpPath = path.join(this.confdir, `.restore-${Date.now()}-${Math.random().toString(16).slice(2, 8)}.json`)
+      fs.writeFileSync(tmpPath, JSON.stringify(config))
+      try {
+        const err = await this._spawnDecodeConfig(['-d', ip, '--restore-file', tmpPath])
+        if (err) throw new Error(`decode-config.py restore-file failed (exit code ${err})`)
+      }
+      finally {
+        fs.rmSync(tmpPath, { force: true })
+      }
+    }
+
+    // Automates the manual buildRecoveryCommand() workflow: hop this host's
+    // WiFi onto the device's fallback AP, push its known-good config, and
+    // always return the WiFi to exactly the state it was in before - even on
+    // failure. A watchdog (NetHelper.scheduleConnectionActivation) is armed
+    // *before* the hop as a dead-man's switch independent of this process,
+    // in addition to (not instead of) the explicit restore in `finally`.
+    async recoveryDevice (apSsid, overrides = {}) {
+      if (!apSsid) throw new Error('recoveryDevice: Tasmota AP SSID is required')
+      if (this.wifiBusy) throw new Error('recoveryDevice: a WiFi scan/recovery is already in progress')
+      this.wifiBusy = true
+      const iface = this.config.wifiInterface || 'wlan0'
+      const manager = await NetHelper.detectNetworkManager()
+      const original = await NetHelper.getCurrentConnection(iface, manager)
+      const watchdogSeconds = this.config.recoveryWatchdogTimeoutSeconds || 180
+      // null => schedule a disconnect: the correct restore target when
+      // nothing was connected before the hop, never an invented connection.
+      const watchdog = await NetHelper.scheduleConnectionActivation(
+        original.connected ? original.connectionId : null, watchdogSeconds, { iface, manager }
+      )
+      let joinHandle
+      try {
+        joinHandle = await NetHelper.connectToNetwork(apSsid, { iface, manager })
+        await NetHelper.waitForConnection(apSsid, { iface, manager })
+
+        const status = await this.httpCommand('192.168.4.1', 'Status', '5', 5000)
+        const mac = status?.StatusNET?.Mac
+        if (!mac) throw new Error('recoveryDevice: could not read MAC address from device (Status 5)')
+
+        // A cached decode-config.py dump lets us restore the device's whole
+        // configuration (module/GPIO, relay names, rules, ...), not just the
+        // handful of fields buildRecoveryCommand()'s Backlog command covers
+        // - which is only enough if the device merely forgot its WiFi
+        // credentials, not if it lost its configuration outright (the
+        // scenario this feature exists for). No deliberate fallback from a
+        // failed restore back to the Backlog push - a failed restore should
+        // surface as an error, not silently downgrade to a partial fix.
+        const row = this.devicesDb.findTableRaw('devices', 'mac', mac, true)
+        const cachedConfigPath = this._findCachedConfigFile(row, mac)
+
+        const recovery = this.buildRecoveryCommand(mac, overrides)
+        if (!recovery.found) throw new Error(`recoveryDevice: no known configuration found for MAC ${mac}`)
+        // A brand-new device (never in the device DB) stays invisible to
+        // getDbDevices()/the Devices tab forever unless registered now.
+        if (!recovery.alreadyKnown) this._addDbDevice({ mac, ip: overrides.ip })
+
+        if (cachedConfigPath) {
+          const cachedConfig = JSONparse(fs.readFileSync(cachedConfigPath, 'utf8'))
+          await this.restoreFullConfig('192.168.4.1', this._applyConfigOverrides(cachedConfig, overrides))
+          try { await this.httpCommand('192.168.4.1', 'Restart', '1', 5000) }
+          catch (err) { this.log(`recoveryDevice: explicit restart after restore not reachable (device likely already rebooted): ${err.message}`) }
+        }
+        else {
+          await this.getRequest(recovery.url, true, 10000) // pushes config; Backlog already ends in Restart 1
+        }
+
+        return { mac, mode: cachedConfigPath ? 'full-restore' : 'backlog', ...recovery }
+      }
+      finally {
+        try {
+          if (original.connected) await NetHelper.activateConnection(original.connectionId, { iface, manager })
+          else await NetHelper.disconnect({ iface, manager })
+        }
+        catch (err) {
+          this.error(`recoveryDevice: failed to restore original connection immediately - the watchdog will still do it in ~${watchdogSeconds}s: ${err.message}`)
+        }
+        if (joinHandle) {
+          try { await NetHelper.forgetNetwork(joinHandle) }
+          catch (err) { this.warn(`recoveryDevice: failed to remove temporary network profile for "${apSsid}": ${err.message}`) }
+        }
+        try { await NetHelper.cancelScheduledActivation(watchdog.unitName) }
+        catch (err) { this.warn(`recoveryDevice: failed to cancel watchdog unit ${watchdog.unitName} (harmless - it will just fire once more): ${err.message}`) }
+        this.wifiBusy = false
+      }
     }
     // end commands
   }
@@ -626,5 +852,46 @@ module.exports = function (RED) {
       return
     }
     res.json(node.listRegisteredDevices())
+  })
+
+  RED.httpAdmin.get('/tasmota-manager/:id/tasmota-aps', RED.auth.needsPermission('tasmota-manager.read'), function (req, res) {
+    const node = RED.nodes.getNode(req.params.id)
+    if (!node || node.type !== 'tasmota-manager') {
+      res.sendStatus(404)
+      return
+    }
+    res.json(node.lastTasmotaScan)
+  })
+
+  RED.httpAdmin.post('/tasmota-manager/:id/tasmota-aps/scan', RED.auth.needsPermission('tasmota-manager.write'), async function (req, res) {
+    const node = RED.nodes.getNode(req.params.id)
+    if (!node || node.type !== 'tasmota-manager') {
+      res.sendStatus(404)
+      return
+    }
+    try {
+      res.json(await node.scanTasmotaAPs(req.body?.iface))
+    }
+    catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  RED.httpAdmin.post('/tasmota-manager/:id/recovery-device', RED.auth.needsPermission('tasmota-manager.write'), async function (req, res) {
+    const node = RED.nodes.getNode(req.params.id)
+    if (!node || node.type !== 'tasmota-manager') {
+      res.sendStatus(404)
+      return
+    }
+    if (!req.body?.ssid) {
+      res.status(400).json({ error: 'ssid is required' })
+      return
+    }
+    try {
+      res.json(await node.recoveryDevice(req.body.ssid, req.body.override || {}))
+    }
+    catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 }

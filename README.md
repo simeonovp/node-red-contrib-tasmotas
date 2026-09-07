@@ -47,7 +47,7 @@ RF (433 MHz) devices follow a similar pattern: an **RF Bridge** node represents 
 | Generic | `tasmota-generic` | Raw access to a device's MQTT stat/tele messages and commands |
 | RF Bridge | `tasmota-rf-bridge` | A Tasmota RF bridge device; sends/receives raw RF codes |
 | RF Device | `tasmota-rf-device` | A single RF remote/sensor tracked by an RF Manager |
-| Config | `tasmota-config` | Access to a Manager's functions (list devices, scan network, HTTP commands, ...) |
+| Config | `tasmota-config` | Access to a Manager's functions (list devices, scan network, HTTP commands, ...) - see the [command reference](./docu/config_node.md) |
 
 ### Config nodes
 

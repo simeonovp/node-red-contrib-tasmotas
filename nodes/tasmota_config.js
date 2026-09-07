@@ -61,7 +61,14 @@ module.exports = function (RED) {
             break
           case 'buildRecoveryCommand':
             if (!msg.mac) return done('MAC address not selected')
-            msg.payload = this.manager.buildRecoveryCommand(msg.mac)
+            msg.payload = this.manager.buildRecoveryCommand(msg.mac, msg.override || {})
+            break
+          case 'findTasmotaAPs':
+            msg.payload = await this.manager.findTasmotaAPs(msg.iface)
+            break
+          case 'recoveryDevice':
+            if (!msg.ssid) return done('Tasmota AP SSID not selected')
+            msg.payload = await this.manager.recoveryDevice(msg.ssid, msg.override || {})
             break
           default:
             this.warn('Unknown action:' + msg.action)

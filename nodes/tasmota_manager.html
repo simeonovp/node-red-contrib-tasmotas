@@ -26,6 +26,14 @@
         <input type="password" id="node-config-input-password" placeholder="fallback WiFi password for recovery commands">
       </div>
       <div class="form-row">
+        <label for="node-config-input-wifiInterface"><i class="fa fa-wifi"></i> WiFi interface</label>
+        <input type="text" id="node-config-input-wifiInterface" placeholder="wlan0">
+      </div>
+      <div class="form-row">
+        <label for="node-config-input-recoveryWatchdogTimeoutSeconds"><i class="fa fa-clock-o"></i> Watchdog timeout (s)</label>
+        <input type="number" id="node-config-input-recoveryWatchdogTimeoutSeconds" placeholder="180" min="1" step="1">
+      </div>
+      <div class="form-row">
         <label for="tasmota-upgrade-devices"><i class="fa fa-tag"></i> Upgrade devices</label>
         <button type="button" id="tasmota-upgrade-devices" class="red-ui-button">
           <i class="fa fa-refresh"></i>
@@ -52,6 +60,37 @@
         </table>
       </div>
     </div>
+    <div id="tasmota-manager-assistants-tab" style="display:none">
+      <h4 style="margin-top:0">Recovery devices</h4>
+      <div class="form-row">
+        <label for="node-config-input-recoveryScanRepeatHours" style="width:140px"><i class="fa fa-clock-o"></i> Repeat every (h)</label>
+        <input type="number" id="node-config-input-recoveryScanRepeatHours" style="width:80px" min="0" step="1" placeholder="24">
+        <span style="color:#888">0 = no automatic repeat</span>
+      </div>
+      <div class="form-row">
+        <label for="node-config-input-recoveryUseIp" style="width:140px"><i class="fa fa-tag"></i> Use IP</label>
+        <input type="text" id="node-config-input-recoveryUseIp" style="width:180px" placeholder="e.g. for a brand-new device">
+      </div>
+      <div class="form-row">
+        <button type="button" id="tasmota-manager-scan-net" class="red-ui-button">
+          <i class="fa fa-search"></i> Scan net
+        </button>
+        <span id="tasmota-manager-scan-status" style="color:#888; margin-left:8px"></span>
+      </div>
+      <div class="form-row">
+        <table id="tasmota-manager-recovery-table" style="width:100%; border-collapse:collapse; table-layout:fixed">
+          <thead>
+            <tr>
+              <th style="width:40%; text-align:left; padding:4px 8px">SSID</th>
+              <th style="width:20%; text-align:left; padding:4px 8px">Signal</th>
+              <th style="width:20%; text-align:left; padding:4px 8px">Known</th>
+              <th style="width:20%; text-align:left; padding:4px 8px">Action</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </script>
 
@@ -61,9 +100,19 @@
   <p>Parameter <b>Networ</b> can be used to scan for new Tasmota devices.</p>
   <p><b>SSID</b>/<b>Password</b> are optional fallback WiFi credentials, used to build a
     device recovery command when a device's own cached configuration doesn't have them.</p>
+  <p><b>WiFi interface</b> (default <code>wlan0</code>) and <b>Watchdog timeout</b> (default 180s)
+    configure the automated AP-fallback recovery assistant (<code>findTasmotaAPs</code>/<code>recoveryDevice</code>
+    actions on a <b>Config</b> node) - which WiFi adapter to hop with, and how long the independent
+    systemd watchdog waits before forcing this host's WiFi back to its original state no matter what.</p>
   <p>The <b>Devices</b> tab lists every tasmota-device node currently registered with this
     manager, along with its current online/offline status, WiFi access point and IP address.
     It only reflects devices from a deployed flow - use <i>Refresh</i> to update it.</p>
+  <p>The <b>Assistants</b> tab's <b>Recovery devices</b> block scans for nearby Tasmota fallback
+    APs (<code>tasmota_XXXXXX-YYYY</code>) and lets you recover each one with a single click.
+    <b>Repeat every (h)</b> (0 = off) re-scans automatically in the background. <b>Use IP</b> is
+    optional and only needed for a brand-new device that has no cached configuration yet. Rows
+    not recognized as one of your own devices (by MAC) are flagged before recovering them, since
+    a neighbor's Tasmota device could also be visible.</p>
 </script>
 
 <script type="text/javascript">
@@ -74,7 +123,11 @@
       name: { value: '', required: true },
       network: { value: '' },
       ssid: { value: '' },
-      password: { value: '' }
+      password: { value: '' },
+      wifiInterface: { value: 'wlan0' },
+      recoveryWatchdogTimeoutSeconds: { value: 180 },
+      recoveryScanRepeatHours: { value: 24 },
+      recoveryUseIp: { value: '' }
     },
     label: function() {
       // use label callback to perform init
@@ -139,16 +192,96 @@
           })
       }
 
+      // -- Assistants tab: Recovery devices --------------------------------
+
+      let recoveryBusy = false
+      const $scanBtn = $('#tasmota-manager-scan-net')
+      const $scanStatus = $('#tasmota-manager-scan-status')
+
+      const setRecoveryBusy = (busy) => {
+        recoveryBusy = busy
+        $scanBtn.prop('disabled', busy)
+        $('#tasmota-manager-recovery-table button').prop('disabled', busy)
+      }
+
+      const renderRecoveryTable = (scan) => {
+        const $tbody = $('#tasmota-manager-recovery-table tbody')
+        $tbody.empty()
+        const cellStyle = 'text-align:left; padding:4px 8px'
+        const $cell = () => $('<td>').css('cssText', cellStyle)
+        const results = (scan && scan.results) || []
+        $scanStatus.text(scan && scan.at ? 'Last scan: ' + new Date(scan.at).toLocaleString() : 'Never scanned yet')
+        if (!results.length) {
+          $tbody.append($('<tr>').append($cell().attr('colspan', 4).append($('<i>').text('No Tasmota fallback APs found'))))
+          return
+        }
+        results.forEach((ap) => {
+          const $row = $('<tr>')
+          $row.append($cell().text(ap.ssid))
+          $row.append($cell().text(ap.signal + (ap.unit === 'percent' ? '%' : ' dBm')))
+          $row.append($cell()
+            .append($('<span>').css('color', ap.known ? '#3fad46' : '#d32f2f').html('&#9679; '))
+            .append(document.createTextNode(ap.known ? (ap.deviceName || 'yes') : 'unknown')))
+          const $btn = $('<button type="button" class="red-ui-button">Recovery</button>')
+            .prop('disabled', recoveryBusy)
+            .click(() => triggerRecovery(ap.ssid, ap.known))
+          $row.append($cell().append($btn))
+          $tbody.append($row)
+        })
+      }
+
+      const loadCachedScan = () => {
+        $.getJSON('tasmota-manager/' + node.id + '/tasmota-aps')
+          .done(renderRecoveryTable)
+          .fail(() => renderRecoveryTable(null))
+      }
+
+      const triggerScan = () => {
+        if (recoveryBusy) return
+        setRecoveryBusy(true)
+        $scanStatus.text('Scanning...')
+        $.ajax({ url: 'tasmota-manager/' + node.id + '/tasmota-aps/scan', method: 'POST' })
+          .done(renderRecoveryTable)
+          .fail((xhr) => {
+            RED.notify('Tasmota AP scan failed: ' + (xhr.responseJSON?.error || xhr.statusText), 'error')
+            loadCachedScan()
+          })
+          .always(() => setRecoveryBusy(false))
+      }
+
+      const triggerRecovery = (ssid, known) => {
+        if (recoveryBusy) return
+        if (!known && !window.confirm('"' + ssid + '" was not recognized as one of your known devices. Continue anyway?')) return
+        setRecoveryBusy(true)
+        const useIp = $('#node-config-input-recoveryUseIp').val()
+        const override = useIp ? { ip: useIp } : {}
+        $.ajax({
+          url: 'tasmota-manager/' + node.id + '/recovery-device',
+          method: 'POST',
+          contentType: 'application/json',
+          data: JSON.stringify({ ssid, override })
+        })
+          .done((result) => { RED.notify('Recovered device ' + result.mac, 'success') })
+          .fail((xhr) => { RED.notify('Recovery of "' + ssid + '" failed: ' + (xhr.responseJSON?.error || xhr.statusText), 'error') })
+          .always(() => { setRecoveryBusy(false); triggerScan() })
+      }
+
+      $scanBtn.click(triggerScan)
+
+      // -- Tabs --------------------------------------------------------------
+
       const tabs = RED.tabs.create({
         id: 'node-config-input-tasmota-tabs',
         onchange: function (tab) {
           $('#node-config-input-tabs-content').children().hide()
           $('#' + tab.id).show()
           if (tab.id === 'tasmota-manager-devices-tab') renderDevicesTable()
+          if (tab.id === 'tasmota-manager-assistants-tab') loadCachedScan()
         }
       })
       tabs.addTab({ id: 'tasmota-manager-settings-tab', label: 'Settings' })
       tabs.addTab({ id: 'tasmota-manager-devices-tab', label: 'Devices' })
+      tabs.addTab({ id: 'tasmota-manager-assistants-tab', label: 'Assistants' })
 
       $('#tasmota-manager-devices-refresh').click(renderDevicesTable)
 
