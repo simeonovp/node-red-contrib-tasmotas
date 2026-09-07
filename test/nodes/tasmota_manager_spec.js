@@ -131,4 +131,100 @@ describe('tasmota-manager node', function () {
 
     assert.strictEqual(res.status, 404)
   })
+
+  describe('buildRecoveryCommand()', function () {
+    function seedDevice (n1, mac, ip, host = 'plug1') {
+      n1.devicesDb.ensureData().devices.push({ mac, ip, host })
+    }
+
+    function writeCachedConfig (n1, ip, config) {
+      fs.writeFileSync(path.join(n1.confdir, ip + '.json'), JSON.stringify(config))
+    }
+
+    it('builds a full Backlog command from the device\'s own cached config', async function () {
+      const name = uniqueName('recoveryfull')
+      const flow = [managerConfig('n1', { name })]
+      await helper.load(managerNodeModule, flow)
+      const n1 = helper.getNode('n1')
+
+      seedDevice(n1, 'AA:BB:CC:DD:EE:01', '10.0.0.9')
+      writeCachedConfig(n1, '10.0.0.9', {
+        sta_ssid: ['myssid', ''],
+        sta_pwd: ['mypass', ''],
+        ip_address: ['10.0.0.9', '10.0.0.1', '255.255.255.0', '8.8.8.8', '8.8.4.4']
+      })
+
+      const result = n1.buildRecoveryCommand('AA:BB:CC:DD:EE:01')
+
+      assert.strictEqual(result.found, true)
+      assert.strictEqual(result.usedFallbackCredentials, false)
+      assert.strictEqual(result.hasStaticIp, true)
+      assert.strictEqual(result.command, 'Backlog SSId1 myssid;Password1 mypass;IpAddress1 10.0.0.9;IpAddress2 10.0.0.1;IpAddress3 255.255.255.0;IpAddress4 8.8.8.8;IpAddress5 8.8.4.4;Restart 1')
+      assert.strictEqual(result.url, 'http://192.168.4.1/cm?cmnd=' + encodeURIComponent(result.command))
+    })
+
+    it('falls back to the manager-level password when the cached config has none', async function () {
+      const name = uniqueName('recoverypwfallback')
+      const flow = [managerConfig('n1', { name, ssid: 'fallbackssid', password: 'fallbackpass' })]
+      await helper.load(managerNodeModule, flow)
+      const n1 = helper.getNode('n1')
+
+      seedDevice(n1, 'AA:BB:CC:DD:EE:02', '10.0.0.10')
+      writeCachedConfig(n1, '10.0.0.10', {
+        sta_ssid: ['myssid', ''],
+        sta_pwd: ['', ''],
+        ip_address: ['10.0.0.10', '10.0.0.1', '255.255.255.0', '8.8.8.8']
+      })
+
+      const result = n1.buildRecoveryCommand('AA:BB:CC:DD:EE:02')
+
+      assert.strictEqual(result.usedFallbackCredentials, true)
+      assert.ok(result.command.includes('SSId1 myssid;Password1 fallbackpass'))
+    })
+
+    it('falls back to manager-level ssid/password and omits IpAddress when no cached config exists', async function () {
+      const name = uniqueName('recoverynocache')
+      const flow = [managerConfig('n1', { name, ssid: 'fallbackssid', password: 'fallbackpass' })]
+      await helper.load(managerNodeModule, flow)
+      const n1 = helper.getNode('n1')
+
+      seedDevice(n1, 'AA:BB:CC:DD:EE:03', '10.0.0.11')
+
+      const result = n1.buildRecoveryCommand('AA:BB:CC:DD:EE:03')
+
+      assert.strictEqual(result.usedFallbackCredentials, true)
+      assert.strictEqual(result.hasStaticIp, false)
+      assert.strictEqual(result.command, 'Backlog SSId1 fallbackssid;Password1 fallbackpass;Restart 1')
+    })
+
+    it('omits IpAddress when the cached config was on DHCP', async function () {
+      const name = uniqueName('recoverydhcp')
+      const flow = [managerConfig('n1', { name })]
+      await helper.load(managerNodeModule, flow)
+      const n1 = helper.getNode('n1')
+
+      seedDevice(n1, 'AA:BB:CC:DD:EE:04', '10.0.0.12')
+      writeCachedConfig(n1, '10.0.0.12', {
+        sta_ssid: ['myssid', ''],
+        sta_pwd: ['mypass', ''],
+        ip_address: ['0.0.0.0', '0.0.0.0', '0.0.0.0', '0.0.0.0']
+      })
+
+      const result = n1.buildRecoveryCommand('AA:BB:CC:DD:EE:04')
+
+      assert.strictEqual(result.hasStaticIp, false)
+      assert.strictEqual(result.command, 'Backlog SSId1 myssid;Password1 mypass;Restart 1')
+    })
+
+    it('returns found:false for an unknown MAC without throwing', async function () {
+      const name = uniqueName('recoveryunknown')
+      const flow = [managerConfig('n1', { name })]
+      await helper.load(managerNodeModule, flow)
+      const n1 = helper.getNode('n1')
+
+      const result = n1.buildRecoveryCommand('00:00:00:00:00:00')
+
+      assert.deepStrictEqual(result, { found: false, mac: '00:00:00:00:00:00' })
+    })
+  })
 })

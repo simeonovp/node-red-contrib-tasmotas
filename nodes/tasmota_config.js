@@ -59,6 +59,10 @@ module.exports = function (RED) {
           case 'scanNetwork':
             await this.manager.scanNetwork()
             break
+          case 'buildRecoveryCommand':
+            if (!msg.mac) return done('MAC address not selected')
+            msg.payload = this.manager.buildRecoveryCommand(msg.mac)
+            break
           default:
             this.warn('Unknown action:' + msg.action)
             return done()

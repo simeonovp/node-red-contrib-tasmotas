@@ -21,6 +21,7 @@ function fakeManagerModule (RED) {
     this.listDbDevices = (field) => { this.calls.push(['listDbDevices', field]); return [] }
     this.getDbDevices = () => { this.calls.push(['getDbDevices']); return [] }
     this.httpCommand = async (ip, cmnd, val) => { this.calls.push(['httpCommand', ip, cmnd, val]); return { Topic: 'dev1' } }
+    this.buildRecoveryCommand = (mac) => { this.calls.push(['buildRecoveryCommand', mac]); return { found: true, mac, command: 'Backlog ...', url: 'http://192.168.4.1/cm?cmnd=...' } }
   }
   RED.nodes.registerType('fake-manager', FakeManager)
 }
@@ -64,6 +65,41 @@ describe('tasmota-config node', function () {
     await waitUntil(() => received.length >= 1)
     assert.deepStrictEqual(n1.calls, [['httpCommand', '1.2.3.4', 'Topic', '']])
     assert.deepStrictEqual(received[0].payload, { Topic: 'dev1' })
+  })
+
+  it('dispatches buildRecoveryCommand with msg.mac', async function () {
+    const flow = [
+      { id: 'n1', type: 'fake-manager' },
+      { id: 'n2', type: 'tasmota-config', manager: 'n1', wires: [['n3']] },
+      helperNode('n3')
+    ]
+    await helper.load([fakeManagerModule, configNodeModule], flow)
+    const n1 = helper.getNode('n1')
+    const n2 = helper.getNode('n2')
+    const n3 = helper.getNode('n3')
+
+    const received = []
+    n3.on('input', (msg) => received.push(msg))
+    n2.receive({ action: 'buildRecoveryCommand', mac: 'AA:BB:CC:DD:EE:01' })
+
+    await waitUntil(() => received.length >= 1)
+    assert.deepStrictEqual(n1.calls, [['buildRecoveryCommand', 'AA:BB:CC:DD:EE:01']])
+    assert.strictEqual(received[0].payload.found, true)
+  })
+
+  it('reports an error when buildRecoveryCommand is dispatched without a MAC address', async function () {
+    const flow = [
+      { id: 'n1', type: 'fake-manager' },
+      { id: 'n2', type: 'tasmota-config', manager: 'n1', wires: [['n3']] },
+      helperNode('n3')
+    ]
+    await helper.load([fakeManagerModule, configNodeModule], flow)
+    const n2 = helper.getNode('n2')
+
+    n2.receive({ action: 'buildRecoveryCommand' })
+
+    await waitUntil(() => n2.error.called)
+    assert.strictEqual(n2.error.lastCall.args[0], 'MAC address not selected')
   })
 
   it('reports an error via done(err) when a synchronous action throws', async function () {

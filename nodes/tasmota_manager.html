@@ -59,6 +59,8 @@
   <p>A configuration node to manage multiple device running the <b>Tasmota</b> firmware.</p>
   <p><b>DB uri</b> is optional parametr to define the location of the resource server if available.</p>
   <p>Parameter <b>Networ</b> can be used to scan for new Tasmota devices.</p>
+  <p><b>SSID</b>/<b>Password</b> are optional fallback WiFi credentials, used to build a
+    device recovery command when a device's own cached configuration doesn't have them.</p>
   <p>The <b>Devices</b> tab lists every tasmota-device node currently registered with this
     manager, along with its current online/offline status, WiFi access point and IP address.
     It only reflects devices from a deployed flow - use <i>Refresh</i> to update it.</p>
