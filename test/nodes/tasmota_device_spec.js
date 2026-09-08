@@ -20,7 +20,7 @@ describe('tasmota-device node', function () {
   // registering one is what makes tasmota-device actually connect to the
   // broker and subscribe to its topics (see tasmota_device.js register()).
   function registerFakeLeaf (device, type = 'tasmota-switch', idx = 0) {
-    device.register({ id: `leaf-${type}-${idx}`, type, config: { idx } })
+    device.register({ id: `leaf-${type}-${idx}`, type, config: { idx }, _onMqttEvent: () => {} })
   }
 
   it('comes online on a retained LWT and requests STATUS 5 (no configured ip)', async function () {
@@ -186,7 +186,7 @@ describe('tasmota-device node', function () {
     await helper.load([brokerNodeModule, deviceNodeModule], flow)
     const device = helper.getNode('n2')
 
-    device.register({ id: 'leaf-shutter-0', type: 'tasmota-shutter', config: { idx: 0 } })
+    device.register({ id: 'leaf-shutter-0', type: 'tasmota-shutter', config: { idx: 0 }, _onMqttEvent: () => {} })
     // let the broker connection settle before the test (and teardown) moves
     // on - ending it while mqtt.js is still mid-handshake can leave aedes'
     // server.close() hanging waiting for that socket to finish.
@@ -209,7 +209,7 @@ describe('tasmota-device node', function () {
     const device = helper.getNode('n2')
     const brokerNode = helper.getNode('n1')
 
-    const leaf = { id: 'leaf-switch-0', type: 'tasmota-switch', config: { idx: 0 } }
+    const leaf = { id: 'leaf-switch-0', type: 'tasmota-switch', config: { idx: 0 }, _onMqttEvent: () => {} }
     device.register(leaf)
     await waitUntil(() => device.brokerNode.connected === true)
     assert.strictEqual(brokerNode.users[device.id], device)

@@ -74,7 +74,7 @@ class TasmotaBase {
       this.closing = true
       this.deviceNode.removeListener('mqtt', this._mqttEventHandler)
       this.deviceNode.removeListener(this.type + (this.config.idx || ''), this._deviceEventHandler)
-      this.deregister(this)
+      this.deviceNode.deregister(this)
       done()
     })
   }

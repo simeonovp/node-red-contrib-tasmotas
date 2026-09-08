@@ -405,8 +405,7 @@ module.exports = function (RED) {
         this.shutters[idx] = this.shutters[idx] || new Shutter(this, idx)
       }
 
-      // set cached LWT
-      // -- if (this.isOnline) tasmotaNode.onDeviceOnline()
+      tasmotaNode._onMqttEvent(this.isOnline ? 'DeviceOnline' : 'DeviceOffline')
     }
 
     /* DeRegister a previously registered TasmotaNode */
