@@ -106,3 +106,4 @@ dist
 # tasmota-manager runtime cache (downloaded device DB, configs, icons)
 /resources/
 /docu/recovery.md
+/logs/

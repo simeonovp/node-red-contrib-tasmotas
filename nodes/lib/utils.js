@@ -166,7 +166,10 @@ class NetHelper {
       }
       catch (err) { /* best-effort only - connectionId is the part that matters for a restore */ }
     }
-    return { manager: NetHelper.NETWORK_MANAGERS.NMCLI, iface, connected, connectionId: connected ? row.connection : null, ssid }
+    // ipAddress is not queried here (would need "nmcli ... device show <iface>",
+    // not yet in docu/recovery_device.md's sudoers list) - waitForConnection's
+    // requireIpPrefix check is therefore a no-op on the nmcli path for now.
+    return { manager: NetHelper.NETWORK_MANAGERS.NMCLI, iface, connected, connectionId: connected ? row.connection : null, ssid, ipAddress: null }
   }
 
   static parseWpaCliStatus (output) {
@@ -188,7 +191,8 @@ class NetHelper {
       iface,
       connected,
       connectionId: connected && status.id !== undefined ? status.id : null,
-      ssid: connected ? (status.ssid || null) : null
+      ssid: connected ? (status.ssid || null) : null,
+      ipAddress: connected ? (status.ip_address || null) : null
     }
   }
 
@@ -402,17 +406,23 @@ class NetHelper {
   }
 
   // Polls getCurrentConnection() until `iface` is actually connected to
-  // `ssid` (including the DHCP lease settling), or throws once `timeoutMs`
-  // elapses - confirms a hop actually landed before anything is queried over
-  // HTTP through it.
-  static async waitForConnection (ssid, { iface = 'wlan0', manager, timeoutMs = 15000, pollIntervalMs = 1000 } = {}) {
+  // `ssid`, or throws once `timeoutMs` elapses - confirms a hop actually
+  // landed before anything is queried over HTTP through it. Association
+  // (wpa_state COMPLETED / nmcli "connected") can settle well before DHCP
+  // hands out an IP, so a caller that's about to make an HTTP request
+  // through the new connection should pass `requireIpPrefix` (e.g.
+  // '192.168.4.') to also wait for that - currently only honored on the
+  // wpa_supplicant path, since getCurrentConnectionNmcli doesn't query an
+  // IP yet (see its comment).
+  static async waitForConnection (ssid, { iface = 'wlan0', manager, timeoutMs = 15000, pollIntervalMs = 1000, requireIpPrefix } = {}) {
     const resolved = manager || await NetHelper.detectNetworkManager()
     const deadline = Date.now() + timeoutMs
     for (;;) {
       const current = await NetHelper.getCurrentConnection(iface, resolved)
-      if (current.connected && current.ssid === ssid) return current
+      const ipReady = !requireIpPrefix || (current.ipAddress && current.ipAddress.startsWith(requireIpPrefix))
+      if (current.connected && current.ssid === ssid && ipReady) return current
       if (Date.now() >= deadline) {
-        throw new Error(`waitForConnection: timed out waiting for ${iface} to connect to "${ssid}"`)
+        throw new Error(`waitForConnection: timed out waiting for ${iface} to connect to "${ssid}"${requireIpPrefix ? ` with an IP in ${requireIpPrefix}*` : ''}`)
       }
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
     }

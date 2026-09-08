@@ -34,8 +34,66 @@ describe('tasmota-manager node', function () {
     n1.devicesDb.ensureData().devices.push({ mac, ip, host })
   }
 
-  function writeCachedConfig (n1, ip, config) {
-    fs.writeFileSync(path.join(n1.confdir, ip + '.json'), JSON.stringify(config))
+  // _findCachedConfigFile() now matches by content (mqtt_topic/hostname/
+  // ip_address), not by filename - so every fixture needs a mqtt_topic that
+  // actually matches the MAC-derived name (unless a test overrides it, e.g.
+  // to exercise the host/ip fallback tiers), same as a real downloadConfig()
+  // cache file would have. `mac` here is the device's MAC, not its IP.
+  function macDerivedTopic (mac) {
+    return `tasmota_${mac.replace(/[^0-9A-Fa-f]/g, '').slice(-6).toUpperCase()}`
+  }
+
+  function writeCachedConfig (n1, mac, config) {
+    const topic = macDerivedTopic(mac)
+    const merged = Object.assign({ mqtt_topic: topic }, config)
+    fs.writeFileSync(path.join(n1.confdir, topic + '.json'), JSON.stringify(merged))
+  }
+
+  // Shared NetHelper stubbing for recoveryDevice()-driven tests (and anything
+  // else that exercises it, e.g. the password-redaction logging tests) -
+  // saved/restored per test so no stub leaks across describe blocks.
+  const NM = NetHelper.NETWORK_MANAGERS.NMCLI
+  const netHelperMethods = [
+    'detectNetworkManager', 'getCurrentConnection', 'scheduleConnectionActivation',
+    'connectToNetwork', 'waitForConnection', 'activateConnection', 'disconnect',
+    'forgetNetwork', 'cancelScheduledActivation'
+  ]
+  let netHelperOriginals
+
+  beforeEach(function () {
+    netHelperOriginals = {}
+    netHelperMethods.forEach((m) => { netHelperOriginals[m] = NetHelper[m] })
+  })
+
+  afterEach(function () {
+    netHelperMethods.forEach((m) => { NetHelper[m] = netHelperOriginals[m] })
+  })
+
+  // Stubs every NetHelper call recoveryDevice() makes, recording call order
+  // in `calls` - the point is verifying the *orchestration* (watchdog
+  // arm/cancel, restore-on-any-outcome, cleanup order), not real networking.
+  function stubNetHelper (calls, { connected = true, connectionId = 'MyHomeWifi' } = {}) {
+    NetHelper.detectNetworkManager = async () => NM
+    NetHelper.getCurrentConnection = async (iface, manager) => {
+      calls.push(['getCurrentConnection', iface, manager])
+      return { manager: NM, iface, connected, connectionId, ssid: connected ? 'MyHomeWifi' : null }
+    }
+    NetHelper.scheduleConnectionActivation = async (connId, seconds, opts) => {
+      calls.push(['scheduleConnectionActivation', connId, seconds, opts])
+      return { unitName: 'tasmota-recovery-test', connectionId: connId, iface: opts.iface, manager: opts.manager, timeoutSeconds: seconds }
+    }
+    NetHelper.connectToNetwork = async (ssid, opts) => {
+      calls.push(['connectToNetwork', ssid, opts])
+      return { manager: NM, iface: opts.iface, ssid }
+    }
+    NetHelper.waitForConnection = async (ssid, opts) => {
+      calls.push(['waitForConnection', ssid, opts])
+      return { connected: true, ssid }
+    }
+    NetHelper.activateConnection = async (connId, opts) => { calls.push(['activateConnection', connId, opts]) }
+    NetHelper.disconnect = async (opts) => { calls.push(['disconnect', opts]) }
+    NetHelper.forgetNetwork = async (handle) => { calls.push(['forgetNetwork', handle]) }
+    NetHelper.cancelScheduledActivation = async (unitName) => { calls.push(['cancelScheduledActivation', unitName]) }
   }
 
   it('loads and creates its resource cache folder', async function () {
@@ -149,7 +207,7 @@ describe('tasmota-manager node', function () {
       const n1 = helper.getNode('n1')
 
       seedDevice(n1, 'AA:BB:CC:DD:EE:01', '10.0.0.9')
-      writeCachedConfig(n1, '10.0.0.9', {
+      writeCachedConfig(n1, 'AA:BB:CC:DD:EE:01', {
         sta_ssid: ['myssid', ''],
         sta_pwd: ['mypass', ''],
         ip_address: ['10.0.0.9', '10.0.0.1', '255.255.255.0', '8.8.8.8', '8.8.4.4']
@@ -172,7 +230,7 @@ describe('tasmota-manager node', function () {
       const n1 = helper.getNode('n1')
 
       seedDevice(n1, 'AA:BB:CC:DD:EE:02', '10.0.0.10')
-      writeCachedConfig(n1, '10.0.0.10', {
+      writeCachedConfig(n1, 'AA:BB:CC:DD:EE:02', {
         sta_ssid: ['myssid', ''],
         sta_pwd: ['', ''],
         ip_address: ['10.0.0.10', '10.0.0.1', '255.255.255.0', '8.8.8.8']
@@ -206,7 +264,7 @@ describe('tasmota-manager node', function () {
       const n1 = helper.getNode('n1')
 
       seedDevice(n1, 'AA:BB:CC:DD:EE:04', '10.0.0.12')
-      writeCachedConfig(n1, '10.0.0.12', {
+      writeCachedConfig(n1, 'AA:BB:CC:DD:EE:04', {
         sta_ssid: ['myssid', ''],
         sta_pwd: ['mypass', ''],
         ip_address: ['0.0.0.0', '0.0.0.0', '0.0.0.0', '0.0.0.0']
@@ -236,7 +294,7 @@ describe('tasmota-manager node', function () {
       const n1 = helper.getNode('n1')
 
       seedDevice(n1, 'AA:BB:CC:DD:EE:06', '10.0.0.20')
-      writeCachedConfig(n1, '10.0.0.20', {
+      writeCachedConfig(n1, 'AA:BB:CC:DD:EE:06', {
         sta_ssid: ['cachedssid', ''],
         sta_pwd: ['cachedpass', ''],
         ip_address: ['10.0.0.20', '10.0.0.1', '255.255.255.0', '8.8.8.8']
@@ -260,7 +318,7 @@ describe('tasmota-manager node', function () {
       const n1 = helper.getNode('n1')
 
       seedDevice(n1, 'AA:BB:CC:DD:EE:07', '10.0.0.21')
-      writeCachedConfig(n1, '10.0.0.21', {
+      writeCachedConfig(n1, 'AA:BB:CC:DD:EE:07', {
         sta_ssid: ['cachedssid', ''],
         sta_pwd: ['cachedpass', ''],
         ip_address: ['10.0.0.21', '10.0.0.1', '255.255.255.0', '8.8.8.8']
@@ -303,24 +361,29 @@ describe('tasmota-manager node', function () {
       assert.deepStrictEqual(result, { found: false, mac: 'AA:BB:CC:DD:EE:98' })
     })
 
-    it('finds the cached config via the MAC-derived filename even when the DB row\'s host/ip are stale', async function () {
-      // Regression: the lookup used to go DB row.ip -> mqttMap[row.ip] -> filename,
-      // so a stale DB ip meant the (still-present, still-correct) cached
-      // config could never be found at all - silently losing all cached
-      // data instead of using it. The DB is not the reliable source here;
-      // the cache (read straight from the device) is.
+    it('finds the cached config via content matching even when the DB row is stale and the filename is unrelated', async function () {
+      // Regression: the lookup used to guess a filename from the DB's ip
+      // (via the legacy mqttMap), so a stale DB ip meant the (still-present,
+      // still-correct) cached config could never be found at all. The
+      // manager now scans every cached file's *content* instead - the
+      // filename plays no role whatsoever, only mqtt_topic/hostname/
+      // ip_address inside it do, so a stale DB doesn't matter as long as the
+      // file's own mqtt_topic/hostname still matches the MAC-derived name.
       const name = uniqueName('recoverymacfile')
       const flow = [managerConfig('n1', { name })]
       await helper.load(managerNodeModule, flow)
       const n1 = helper.getNode('n1')
 
       seedDevice(n1, 'AA:BB:A1:B2:C3', '10.0.0.200', 'stale-host')
-      writeCachedConfig(n1, 'tasmota_A1B2C3', {
+      // Deliberately NOT written via writeCachedConfig() / under any
+      // MAC-or-IP-derived name, to prove the filename is irrelevant.
+      fs.writeFileSync(path.join(n1.confdir, 'some-unrelated-filename.json'), JSON.stringify({
+        mqtt_topic: 'tasmota_A1B2C3',
         sta_ssid: ['myssid', ''],
         sta_pwd: ['mypass', ''],
         ip_address: ['10.0.0.9', '10.0.0.1', '255.255.255.0', '8.8.8.8'],
         hostname: 'plug1'
-      })
+      }))
 
       const result = n1.buildRecoveryCommand('AA:BB:A1:B2:C3')
 
@@ -328,6 +391,48 @@ describe('tasmota-manager node', function () {
       assert.ok(result.command.includes('SSId1 myssid;Password1 mypass'))
       assert.strictEqual(result.ip, '10.0.0.9', 'should come from the cache, not the stale DB row (10.0.0.200)')
       assert.strictEqual(result.host, 'plug1', 'should come from the cache, not the stale DB row (stale-host)')
+    })
+
+    it('falls back to matching by DB host when the MAC-derived topic name doesn\'t match (a manually renamed topic)', async function () {
+      const name = uniqueName('recoveryhosttier')
+      const flow = [managerConfig('n1', { name })]
+      await helper.load(managerNodeModule, flow)
+      const n1 = helper.getNode('n1')
+
+      seedDevice(n1, 'AA:BB:CC:DD:EE:30', '10.0.0.80', 'my-renamed-plug')
+      fs.writeFileSync(path.join(n1.confdir, 'whatever.json'), JSON.stringify({
+        mqtt_topic: 'my-renamed-plug', // deliberately not tasmota_<macSuffix>
+        hostname: 'my-renamed-plug',
+        sta_ssid: ['myssid', ''],
+        sta_pwd: ['mypass', ''],
+        ip_address: []
+      }))
+
+      const result = n1.buildRecoveryCommand('AA:BB:CC:DD:EE:30')
+
+      assert.strictEqual(result.found, true)
+      assert.ok(result.command.includes('SSId1 myssid;Password1 mypass'))
+    })
+
+    it('falls back to matching by DB ip as a last resort, when neither the MAC-derived topic nor the DB host match', async function () {
+      const name = uniqueName('recoveryiptier')
+      const flow = [managerConfig('n1', { name })]
+      await helper.load(managerNodeModule, flow)
+      const n1 = helper.getNode('n1')
+
+      seedDevice(n1, 'AA:BB:CC:DD:EE:31', '10.0.0.81', 'unrelated-host')
+      fs.writeFileSync(path.join(n1.confdir, 'whatever2.json'), JSON.stringify({
+        mqtt_topic: 'something-else',
+        hostname: 'something-else',
+        sta_ssid: ['myssid', ''],
+        sta_pwd: ['mypass', ''],
+        ip_address: ['10.0.0.81', '10.0.0.1', '255.255.255.0']
+      }))
+
+      const result = n1.buildRecoveryCommand('AA:BB:CC:DD:EE:31')
+
+      assert.strictEqual(result.found, true)
+      assert.ok(result.command.includes('SSId1 myssid;Password1 mypass'))
     })
 
     it('falls back to the DB row\'s ip/host only when no cached config is found at all', async function () {
@@ -408,50 +513,6 @@ describe('tasmota-manager node', function () {
   })
 
   describe('recoveryDevice()', function () {
-    const NM = NetHelper.NETWORK_MANAGERS.NMCLI
-    const netHelperMethods = [
-      'detectNetworkManager', 'getCurrentConnection', 'scheduleConnectionActivation',
-      'connectToNetwork', 'waitForConnection', 'activateConnection', 'disconnect',
-      'forgetNetwork', 'cancelScheduledActivation'
-    ]
-    let originals
-
-    beforeEach(function () {
-      originals = {}
-      netHelperMethods.forEach((m) => { originals[m] = NetHelper[m] })
-    })
-
-    afterEach(function () {
-      netHelperMethods.forEach((m) => { NetHelper[m] = originals[m] })
-    })
-
-    // Stubs every NetHelper call recoveryDevice() makes, recording call order
-    // in `calls` - the point is verifying the *orchestration* (watchdog
-    // arm/cancel, restore-on-any-outcome, cleanup order), not real networking.
-    function stubNetHelper (calls, { connected = true, connectionId = 'MyHomeWifi' } = {}) {
-      NetHelper.detectNetworkManager = async () => NM
-      NetHelper.getCurrentConnection = async (iface, manager) => {
-        calls.push(['getCurrentConnection', iface, manager])
-        return { manager: NM, iface, connected, connectionId, ssid: connected ? 'MyHomeWifi' : null }
-      }
-      NetHelper.scheduleConnectionActivation = async (connId, seconds, opts) => {
-        calls.push(['scheduleConnectionActivation', connId, seconds, opts])
-        return { unitName: 'tasmota-recovery-test', connectionId: connId, iface: opts.iface, manager: opts.manager, timeoutSeconds: seconds }
-      }
-      NetHelper.connectToNetwork = async (ssid, opts) => {
-        calls.push(['connectToNetwork', ssid, opts])
-        return { manager: NM, iface: opts.iface, ssid }
-      }
-      NetHelper.waitForConnection = async (ssid, opts) => {
-        calls.push(['waitForConnection', ssid, opts])
-        return { connected: true, ssid }
-      }
-      NetHelper.activateConnection = async (connId, opts) => { calls.push(['activateConnection', connId, opts]) }
-      NetHelper.disconnect = async (opts) => { calls.push(['disconnect', opts]) }
-      NetHelper.forgetNetwork = async (handle) => { calls.push(['forgetNetwork', handle]) }
-      NetHelper.cancelScheduledActivation = async (unitName) => { calls.push(['cancelScheduledActivation', unitName]) }
-    }
-
     it('captures the connection, arms the watchdog, hops, pushes the config, then restores/forgets/cancels in order', async function () {
       // No cached config seeded on purpose - this test is about the
       // watchdog/restore/cleanup orchestration (the "backlog" push path),
@@ -632,7 +693,7 @@ describe('tasmota-manager node', function () {
       const n1 = helper.getNode('n1')
 
       seedDevice(n1, 'AA:BB:CC:DD:EE:15', '10.0.0.62')
-      writeCachedConfig(n1, '10.0.0.62', {
+      writeCachedConfig(n1, 'AA:BB:CC:DD:EE:15', {
         sta_ssid: ['cachedssid', ''],
         sta_pwd: ['cachedpass', ''],
         ip_address: ['10.0.0.62', '10.0.0.1', '255.255.255.0', '8.8.8.8'],
@@ -666,7 +727,7 @@ describe('tasmota-manager node', function () {
       const n1 = helper.getNode('n1')
 
       seedDevice(n1, 'AA:BB:CC:DD:EE:16', '10.0.0.63')
-      writeCachedConfig(n1, '10.0.0.63', { sta_ssid: ['cachedssid', ''], sta_pwd: ['cachedpass', ''], ip_address: [] })
+      writeCachedConfig(n1, 'AA:BB:CC:DD:EE:16', { sta_ssid: ['cachedssid', ''], sta_pwd: ['cachedpass', ''], ip_address: [] })
 
       const calls = []
       stubNetHelper(calls, { connected: true, connectionId: 'MyHomeWifi' })
@@ -690,7 +751,7 @@ describe('tasmota-manager node', function () {
       const n1 = helper.getNode('n1')
 
       seedDevice(n1, 'AA:BB:CC:DD:EE:17', '10.0.0.64')
-      writeCachedConfig(n1, '10.0.0.64', { sta_ssid: ['cachedssid', ''], sta_pwd: ['cachedpass', ''], ip_address: [] })
+      writeCachedConfig(n1, 'AA:BB:CC:DD:EE:17', { sta_ssid: ['cachedssid', ''], sta_pwd: ['cachedpass', ''], ip_address: [] })
 
       const calls = []
       stubNetHelper(calls, { connected: true, connectionId: 'MyHomeWifi' })
@@ -750,6 +811,30 @@ describe('tasmota-manager node', function () {
     })
   })
 
+  describe('_parseMissingPythonModule()', function () {
+    it('extracts the module name from a real decode-config.py ModuleNotFoundError', async function () {
+      const name = uniqueName('parsemissingmodule')
+      const flow = [managerConfig('n1', { name })]
+      await helper.load(managerNodeModule, flow)
+      const n1 = helper.getNode('n1')
+
+      const stderr = "No module named 'configargparse', try \"python -m pip install 'configargparse'\"\n"
+
+      assert.strictEqual(n1._parseMissingPythonModule(stderr), 'configargparse')
+    })
+
+    it('returns undefined when stderr does not mention a missing module', async function () {
+      const name = uniqueName('parsemissingmodulenone')
+      const flow = [managerConfig('n1', { name })]
+      await helper.load(managerNodeModule, flow)
+      const n1 = helper.getNode('n1')
+
+      assert.strictEqual(n1._parseMissingPythonModule('some other error\n'), undefined)
+      assert.strictEqual(n1._parseMissingPythonModule(''), undefined)
+      assert.strictEqual(n1._parseMissingPythonModule(undefined), undefined)
+    })
+  })
+
   describe('restoreFullConfig()', function () {
     it('writes the config to a temp file, restores it via decode-config.py, and deletes the temp file', async function () {
       const name = uniqueName('restorefullconfig-ok')
@@ -797,6 +882,66 @@ describe('tasmota-manager node', function () {
 
       await assert.rejects(() => n1.restoreFullConfig('192.168.4.1', { sta_ssid: ['x', ''] }), /spawn boom/)
       assert.strictEqual(fs.existsSync(tmpPathAtCallTime), false)
+    })
+  })
+
+  describe('_redactPassword() and recoveryDevice() logging', function () {
+    it('_redactPassword() masks the Password1 value only', async function () {
+      const name = uniqueName('redact')
+      const flow = [managerConfig('n1', { name })]
+      await helper.load(managerNodeModule, flow)
+      const n1 = helper.getNode('n1')
+
+      const redacted = n1._redactPassword('Backlog SSId1 myssid;Password1 supersecret;IpAddress1 10.0.0.9;Restart 1')
+
+      assert.strictEqual(redacted, 'Backlog SSId1 myssid;Password1 ***;IpAddress1 10.0.0.9;Restart 1')
+      assert.ok(!redacted.includes('supersecret'))
+    })
+
+    it('recoveryDevice() never logs the plaintext WiFi password (backlog path)', async function () {
+      const name = uniqueName('recoverydevice-logredact')
+      const flow = [managerConfig('n1', { name, ssid: 'homessid', password: 'supersecretpw' })]
+      await helper.load(managerNodeModule, flow)
+      const n1 = helper.getNode('n1')
+
+      seedDevice(n1, 'AA:BB:CC:DD:EE:20', '10.0.0.70')
+
+      const calls = []
+      stubNetHelper(calls, { connected: true, connectionId: 'MyHomeWifi' })
+      n1.httpCommand = async () => ({ StatusNET: { Mac: 'AA:BB:CC:DD:EE:20' } })
+      n1.getRequest = async () => ({ Backlog: 'Done' })
+
+      const logLines = []
+      n1.log = (msg) => logLines.push(String(msg))
+
+      await n1.recoveryDevice('tasmota_AABBCC-1234')
+
+      assert.ok(logLines.length > 0, 'should have logged something')
+      assert.ok(logLines.every((line) => !line.includes('supersecretpw')), 'plaintext password must never appear in a log line')
+    })
+
+    it('recoveryDevice() never logs the plaintext WiFi password given as an override (full-restore path)', async function () {
+      const name = uniqueName('recoverydevice-logredact-restore')
+      const flow = [managerConfig('n1', { name })]
+      await helper.load(managerNodeModule, flow)
+      const n1 = helper.getNode('n1')
+
+      seedDevice(n1, 'AA:BB:CC:DD:EE:21', '10.0.0.71')
+      writeCachedConfig(n1, 'AA:BB:CC:DD:EE:21', { sta_ssid: ['cachedssid', ''], sta_pwd: ['cachedpass', ''], ip_address: [] })
+
+      const calls = []
+      stubNetHelper(calls, { connected: true, connectionId: 'MyHomeWifi' })
+      n1.httpCommand = async () => ({ StatusNET: { Mac: 'AA:BB:CC:DD:EE:21' } })
+      n1.restoreFullConfig = async () => {}
+
+      const logLines = []
+      n1.log = (msg) => logLines.push(String(msg))
+      n1.error = (msg) => logLines.push(String(msg))
+      n1.warn = (msg) => logLines.push(String(msg))
+
+      await n1.recoveryDevice('tasmota_AABBCC-1234', { password: 'overridesecretpw' })
+
+      assert.ok(logLines.every((line) => !line.includes('overridesecretpw')), 'plaintext override password must never appear in a log line')
     })
   })
 

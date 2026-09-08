@@ -263,7 +263,17 @@
         })
           .done((result) => { RED.notify('Recovered device ' + result.mac, 'success') })
           .fail((xhr) => { RED.notify('Recovery of "' + ssid + '" failed: ' + (xhr.responseJSON?.error || xhr.statusText), 'error') })
-          .always(() => { setRecoveryBusy(false); triggerScan() })
+          .always(() => {
+            setRecoveryBusy(false)
+            // Reflect the server's own cache fix (recoveryDevice() already
+            // dropped this ssid from it on success) immediately...
+            loadCachedScan()
+            // ...then give the device time to actually reboot and drop its
+            // fallback AP before trusting a live scan as confirmation - this
+            // flow isn't time-critical, so waiting is cheaper than a scan
+            // run too soon catching it mid-reboot and re-adding it.
+            setTimeout(triggerScan, 15000)
+          })
       }
 
       $scanBtn.click(triggerScan)

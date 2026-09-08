@@ -240,15 +240,74 @@ module.exports = function (RED) {
       }
     }
 
-    _spawnDecodeConfig (params) {
+    // decode-config.py's own Python dependencies (e.g. configargparse) are
+    // NOT installed globally - to avoid asking the user to do that manually,
+    // a missing one reported in stderr (Python's own "No module named 'x'")
+    // is pip-installed into a local, per-manager folder (--target, not the
+    // system/user site-packages) and the run retried, up to a few times in
+    // case of a short dependency chain.
+    _pylibsDir () {
+      return path.join(this.confdir, 'pylibs')
+    }
+
+    // Pure/testable: extracts the missing module name from decode-config.py's
+    // stderr, if that's what failed.
+    _parseMissingPythonModule (stderr) {
+      const match = String(stderr || '').match(/No module named '([\w.]+)'/)
+      return match ? match[1] : undefined
+    }
+
+    _installPythonModuleLocally (moduleName) {
+      const pylibsDir = this._pylibsDir()
+      this.log(`decode-config.py: missing Python module "${moduleName}" - installing locally to ${pylibsDir} (not system-wide)...`)
+      if (!fs.existsSync(pylibsDir)) fs.mkdirSync(pylibsDir, { recursive: true })
       return new Promise((resolve, reject) => {
-        const pythonProcess = spawn('python', [this.confdir + '/decode-config.py', ...params])
+        const pip = spawn('python', ['-m', 'pip', 'install', '--target', pylibsDir, moduleName])
+        let stderr = ''
+        pip.stdout.on('data', (data) => this.log(data))
+        pip.stderr.on('data', (data) => { stderr += data; this.warn(data) })
+        pip.on('error', (err) => reject(err))
+        pip.on('exit', (code) => {
+          if (code) {
+            // "python -m pip" itself fails this way when the pip module isn't
+            // installed at all (common on a bare Raspberry Pi OS python3) -
+            // no local install can fix that, only apt can.
+            const hint = /No module named pip/.test(stderr)
+              ? ' - pip itself is not installed for this Python; run: sudo apt install python3-pip'
+              : ''
+            reject(new Error(`pip install ${moduleName} exited with code ${code}: ${stderr.trim()}${hint}`))
+            return
+          }
+          this.log(`decode-config.py: installed "${moduleName}" locally`)
+          resolve()
+        })
+      })
+    }
+
+    _spawnDecodeConfig (params, attemptsLeft = 3) {
+      const pylibsDir = this._pylibsDir()
+      const env = Object.assign({}, process.env, {
+        PYTHONPATH: pylibsDir + (process.env.PYTHONPATH ? path.delimiter + process.env.PYTHONPATH : '')
+      })
+      return new Promise((resolve, reject) => {
+        const pythonProcess = spawn('python', [this.confdir + '/decode-config.py', ...params], { env })
+        let stderr = ''
         pythonProcess.stdout.on('data', (data) => this.log(data))
-        pythonProcess.stderr.on('data', (data) => this.warn(data))
+        pythonProcess.stderr.on('data', (data) => { stderr += data; this.warn(data) })
         pythonProcess.on('error', (err) => {
           reject(new Error(`Failed to run decode-config.py - is python installed and on PATH? (${err.message})`))
         })
-        pythonProcess.on('exit', (code, signal) => resolve(code))
+        pythonProcess.on('exit', (code, signal) => {
+          if (!code || attemptsLeft <= 0) { resolve(code); return }
+          const missingModule = this._parseMissingPythonModule(stderr)
+          if (!missingModule) { resolve(code); return }
+          this._installPythonModuleLocally(missingModule)
+            .then(() => this._spawnDecodeConfig(params, attemptsLeft - 1))
+            .then(resolve, (err) => {
+              this.error(`decode-config.py: could not auto-install missing Python module "${missingModule}": ${err.message} - install it manually: python -m pip install ${missingModule}`)
+              resolve(code)
+            })
+        })
       })
     }
 
@@ -589,26 +648,36 @@ module.exports = function (RED) {
       return await this.getRequest(url, true, timeout)
     }
 
-    // Locates a device's cached decode-config.py dump without depending on
-    // this.mqttMap (the legacy ip->mqtt_topic lookup - MQTT is optional in
-    // Tasmota, and that mapping is stale/historical baggage we're moving
-    // away from for new code, not something to build further on). Prefers
-    // the MAC-derived default topic name (Tasmota's own tasmota_%06X
-    // hostname/topic, from the last 3 MAC bytes - the same identifier
-    // NetHelper.findTasmotaAPs() extracts from a fallback-AP SSID), since
-    // that's stable and doesn't depend on the (possibly stale) device DB;
-    // the DB's host/ip are only a fallback, for a manually renamed topic.
+    // Locates a device's cached decode-config.py dump. We don't actually
+    // know the filename in advance (guessing one - even a MAC-derived one -
+    // assumes the DB or Tasmota's default naming still holds, exactly the
+    // kind of assumption that bit us with mqttMap) - recovery is rare enough
+    // that reading every cached .json's content instead is not a real cost,
+    // and it's the only way that's robust against a renamed MQTT_TOPIC/
+    // Hostname *and* a stale DB at the same time. Priority: a file whose own
+    // mqtt_topic/hostname matches the MAC-derived default Tasmota name
+    // (stable, doesn't depend on the DB at all) > a file matching the DB's
+    // (possibly stale) host > a file matching the DB's (possibly stale) ip.
     _findCachedConfigFile (row, mac) {
-      const macSuffix = mac && mac.replace(/[^0-9A-Fa-f]/g, '').slice(-6)
-      const candidates = []
-      if (macSuffix) candidates.push(`tasmota_${macSuffix.toUpperCase()}`, `tasmota_${macSuffix.toLowerCase()}`)
-      if (row?.host) candidates.push(row.host)
-      if (row?.ip) candidates.push(row.ip)
-      for (const base of candidates) {
-        const filepath = path.join(this.confdir, base + '.json')
-        if (fs.existsSync(filepath)) return filepath
+      if (!fs.existsSync(this.confdir)) return undefined
+      const macSuffix = mac && mac.replace(/[^0-9A-Fa-f]/g, '').slice(-6).toUpperCase()
+      const expectedTopic = macSuffix && `TASMOTA_${macSuffix}`
+
+      let hostMatch
+      let ipMatch
+      for (const file of fs.readdirSync(this.confdir)) {
+        if (path.parse(file).ext !== '.json' || file.startsWith('.')) continue
+        const filepath = path.join(this.confdir, file)
+        const config = JSONparse(fs.readFileSync(filepath, 'utf8'))
+        if (!config) continue
+
+        const topic = (config.mqtt_topic || '').toUpperCase()
+        const hostname = (config.hostname || '').toUpperCase()
+        if (expectedTopic && (topic === expectedTopic || hostname === expectedTopic)) return filepath
+        if (!hostMatch && row?.host && (config.hostname === row.host || config.mqtt_topic === row.host)) hostMatch = filepath
+        if (!ipMatch && row?.ip && config.ip_address?.[0] === row.ip) ipMatch = filepath
       }
-      return undefined
+      return hostMatch || ipMatch
     }
 
     // Build a manual recovery command/URL for a device that fell back to its
@@ -677,9 +746,17 @@ module.exports = function (RED) {
     async findTasmotaAPs (iface) {
       if (this.wifiBusy) throw new Error('findTasmotaAPs: a WiFi scan/recovery is already in progress')
       this.wifiBusy = true
+      const resolvedIface = iface || this.config.wifiInterface || 'wlan0'
+      this.log(`findTasmotaAPs: scanning on ${resolvedIface}...`)
       try {
-        const networks = await NetHelper.scanWifiNetworks(iface || this.config.wifiInterface || 'wlan0')
-        return NetHelper.findTasmotaAPs(networks)
+        const networks = await NetHelper.scanWifiNetworks(resolvedIface)
+        const found = NetHelper.findTasmotaAPs(networks)
+        this.log(`findTasmotaAPs: found ${found.length} Tasmota fallback AP(s) out of ${networks.length} network(s) seen: ${found.map((ap) => ap.ssid).join(', ') || '-'}`)
+        return found
+      }
+      catch (err) {
+        this.error(`findTasmotaAPs: scan failed: ${err.message}`)
+        throw err
       }
       finally {
         this.wifiBusy = false
@@ -766,33 +843,63 @@ module.exports = function (RED) {
       }
     }
 
+    // Hides a Backlog command's Password1 value before it's ever logged -
+    // recovery is rare enough that logging the full flow is worth it (see
+    // recoveryDevice() below), but the WiFi password must never end up in
+    // the Node-RED log/debug sidebar.
+    _redactPassword (command) {
+      // Match up to the next ';' (Backlog's own command separator), not just
+      // \S+ - the password is followed by ";IpAddress1 ..." with no space,
+      // so \S+ would have greedily swallowed that too.
+      return String(command).replace(/Password1 [^;]+/, 'Password1 ***')
+    }
+
     // Automates the manual buildRecoveryCommand() workflow: hop this host's
     // WiFi onto the device's fallback AP, push its known-good config, and
     // always return the WiFi to exactly the state it was in before - even on
     // failure. A watchdog (NetHelper.scheduleConnectionActivation) is armed
     // *before* the hop as a dead-man's switch independent of this process,
     // in addition to (not instead of) the explicit restore in `finally`.
+    //
+    // This whole flow runs rarely and is hard to reproduce on demand (it
+    // needs a device actually stuck in AP-fallback mode), so every step is
+    // logged - a failed attempt may be the only chance to see what happened.
+    // `this.log()` for normal progress, `this.warn()` for recoverable
+    // problems, `this.error()` for the ones that end the attempt.
     async recoveryDevice (apSsid, overrides = {}) {
+      const t0 = Date.now()
+      const tag = `recoveryDevice(${apSsid})`
       if (!apSsid) throw new Error('recoveryDevice: Tasmota AP SSID is required')
       if (this.wifiBusy) throw new Error('recoveryDevice: a WiFi scan/recovery is already in progress')
       this.wifiBusy = true
+      this.log(`${tag}: starting - overrides=${JSON.stringify({ ...overrides, password: overrides.password ? '***' : undefined })}`)
+
       const iface = this.config.wifiInterface || 'wlan0'
       const manager = await NetHelper.detectNetworkManager()
+      this.log(`${tag}: using network manager "${manager}" on interface "${iface}"`)
+
       const original = await NetHelper.getCurrentConnection(iface, manager)
+      this.log(`${tag}: current connection before hop - connected=${original.connected} ssid=${original.ssid || '-'} connectionId=${original.connectionId ?? '-'}`)
+
       const watchdogSeconds = this.config.recoveryWatchdogTimeoutSeconds || 180
       // null => schedule a disconnect: the correct restore target when
       // nothing was connected before the hop, never an invented connection.
       const watchdog = await NetHelper.scheduleConnectionActivation(
         original.connected ? original.connectionId : null, watchdogSeconds, { iface, manager }
       )
+      this.log(`${tag}: watchdog armed (unit=${watchdog.unitName}, fires in ${watchdogSeconds}s, target=${original.connected ? original.connectionId : 'disconnect'})`)
+
       let joinHandle
       try {
+        this.log(`${tag}: joining AP "${apSsid}"...`)
         joinHandle = await NetHelper.connectToNetwork(apSsid, { iface, manager })
-        await NetHelper.waitForConnection(apSsid, { iface, manager })
+        await NetHelper.waitForConnection(apSsid, { iface, manager, requireIpPrefix: '192.168.4.' })
+        this.log(`${tag}: joined "${apSsid}" and confirmed connected`)
 
         const status = await this.httpCommand('192.168.4.1', 'Status', '5', 5000)
         const mac = status?.StatusNET?.Mac
         if (!mac) throw new Error('recoveryDevice: could not read MAC address from device (Status 5)')
+        this.log(`${tag}: device MAC is ${mac}`)
 
         // A cached decode-config.py dump lets us restore the device's whole
         // configuration (module/GPIO, relay names, rules, ...), not just the
@@ -804,40 +911,74 @@ module.exports = function (RED) {
         // surface as an error, not silently downgrade to a partial fix.
         const row = this.devicesDb.findTableRaw('devices', 'mac', mac, true)
         const cachedConfigPath = this._findCachedConfigFile(row, mac)
+        this.log(`${tag}: cached config ${cachedConfigPath ? 'found at ' + cachedConfigPath : 'not found'} -> mode=${cachedConfigPath ? 'full-restore' : 'backlog'}`)
 
         const recovery = this.buildRecoveryCommand(mac, overrides)
         if (!recovery.found) throw new Error(`recoveryDevice: no known configuration found for MAC ${mac}`)
+        this.log(`${tag}: recovery summary - alreadyKnown=${recovery.alreadyKnown} usedFallbackCredentials=${recovery.usedFallbackCredentials} hasStaticIp=${recovery.hasStaticIp} ip=${recovery.ip || '-'} host=${recovery.host || '-'}`)
         // A brand-new device (never in the device DB) stays invisible to
         // getDbDevices()/the Devices tab forever unless registered now.
-        if (!recovery.alreadyKnown) this._addDbDevice({ mac, ip: overrides.ip })
+        if (!recovery.alreadyKnown) {
+          this._addDbDevice({ mac, ip: overrides.ip })
+          this.log(`${tag}: registered new DB row for previously-unknown device ${mac}`)
+        }
 
         if (cachedConfigPath) {
           const cachedConfig = JSONparse(fs.readFileSync(cachedConfigPath, 'utf8'))
+          this.log(`${tag}: restoring full config to 192.168.4.1 via decode-config.py...`)
           await this.restoreFullConfig('192.168.4.1', this._applyConfigOverrides(cachedConfig, overrides))
-          try { await this.httpCommand('192.168.4.1', 'Restart', '1', 5000) }
-          catch (err) { this.log(`recoveryDevice: explicit restart after restore not reachable (device likely already rebooted): ${err.message}`) }
+          this.log(`${tag}: full config restore succeeded`)
+          try {
+            await this.httpCommand('192.168.4.1', 'Restart', '1', 5000)
+            this.log(`${tag}: explicit post-restore restart acknowledged`)
+          }
+          catch (err) { this.log(`${tag}: explicit restart after restore not reachable (device likely already rebooted): ${err.message}`) }
         }
         else {
+          this.log(`${tag}: pushing Backlog command: ${this._redactPassword(recovery.command)}`)
           await this.getRequest(recovery.url, true, 10000) // pushes config; Backlog already ends in Restart 1
+          this.log(`${tag}: Backlog push acknowledged`)
         }
 
-        return { mac, mode: cachedConfigPath ? 'full-restore' : 'backlog', ...recovery }
+        const result = { mac, mode: cachedConfigPath ? 'full-restore' : 'backlog', ...recovery }
+        this.log(`${tag}: SUCCESS after ${Date.now() - t0}ms - mode=${result.mode} mac=${mac}`)
+        // The device was just told to leave AP mode - drop it from the cached
+        // scan now rather than leaving it there until some future scan
+        // happens to run after it's actually rebooted. A scan run right after
+        // this (e.g. the editor's post-recovery re-scan) would likely still
+        // catch it mid-reboot and overwrite this anyway, but a GUI reopened
+        // before that happens should reflect the fix immediately.
+        this.lastTasmotaScan = { ...this.lastTasmotaScan, results: this.lastTasmotaScan.results.filter((ap) => ap.ssid !== apSsid) }
+        return result
+      }
+      catch (err) {
+        this.error(`${tag}: FAILED after ${Date.now() - t0}ms - ${err.stack || err.message || err}`)
+        throw err
       }
       finally {
+        this.log(`${tag}: restoring pre-hop network state...`)
         try {
           if (original.connected) await NetHelper.activateConnection(original.connectionId, { iface, manager })
           else await NetHelper.disconnect({ iface, manager })
+          this.log(`${tag}: original connection restored (${original.connected ? original.connectionId : 'disconnected'})`)
         }
         catch (err) {
-          this.error(`recoveryDevice: failed to restore original connection immediately - the watchdog will still do it in ~${watchdogSeconds}s: ${err.message}`)
+          this.error(`${tag}: failed to restore original connection immediately - the watchdog will still do it in ~${watchdogSeconds}s: ${err.message}`)
         }
         if (joinHandle) {
-          try { await NetHelper.forgetNetwork(joinHandle) }
-          catch (err) { this.warn(`recoveryDevice: failed to remove temporary network profile for "${apSsid}": ${err.message}`) }
+          try {
+            await NetHelper.forgetNetwork(joinHandle)
+            this.log(`${tag}: temporary network profile for "${apSsid}" removed`)
+          }
+          catch (err) { this.warn(`${tag}: failed to remove temporary network profile for "${apSsid}": ${err.message}`) }
         }
-        try { await NetHelper.cancelScheduledActivation(watchdog.unitName) }
-        catch (err) { this.warn(`recoveryDevice: failed to cancel watchdog unit ${watchdog.unitName} (harmless - it will just fire once more): ${err.message}`) }
+        try {
+          await NetHelper.cancelScheduledActivation(watchdog.unitName)
+          this.log(`${tag}: watchdog unit ${watchdog.unitName} cancelled`)
+        }
+        catch (err) { this.warn(`${tag}: failed to cancel watchdog unit ${watchdog.unitName} (harmless - it will just fire once more): ${err.message}`) }
         this.wifiBusy = false
+        this.log(`${tag}: finished (${Date.now() - t0}ms total)`)
       }
     }
     // end commands

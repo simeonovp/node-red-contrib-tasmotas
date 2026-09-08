@@ -1,6 +1,6 @@
 # TODOs:
 
-# v2.2.1
+# v2.3.0
  - Added: new "Devices" tab in the tasmota-manager editor, listing every currently registered device with its name, online/offline status, WiFi access point and IP address
  - Fixed: a device could permanently fail to receive any MQTT data (never going online) when its first user registered after the broker connection was already established, instead of only during the initial connect - noticeable with many devices on slower hardware
  - Fixed: the Devices tab's table columns didn't line up with their headers
