@@ -108,9 +108,23 @@ class NetHelper {
     return networks
   }
 
-  static async scanWifiNetworksIw (iface = 'wlan0') {
-    const { stdout } = await execAsync(`sudo -n iw dev ${NetHelper.shellQuote(iface)} scan`, { timeout: 15000 })
-    return NetHelper.parseIwScan(stdout)
+  // cfg80211 only allows one scan in flight per interface - wpa_supplicant
+  // runs its own background scans (e.g. while trying to reconnect/roam),
+  // which can collide with this explicit trigger and get rejected with
+  // "Invalid exchange" (EBADE, errno 52). That's a transient busy state, not
+  // a real failure, so retry a few times with a short backoff before giving up.
+  static async scanWifiNetworksIw (iface = 'wlan0', attemptsLeft = 3) {
+    try {
+      const { stdout } = await execAsync(`sudo -n iw dev ${NetHelper.shellQuote(iface)} scan`, { timeout: 15000 })
+      return NetHelper.parseIwScan(stdout)
+    }
+    catch (err) {
+      if (attemptsLeft > 1 && /Invalid exchange/.test(err.message)) {
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+        return NetHelper.scanWifiNetworksIw(iface, attemptsLeft - 1)
+      }
+      throw err
+    }
   }
 
   // Returns [{ ssid, signal, unit }, ...] for every network currently visible

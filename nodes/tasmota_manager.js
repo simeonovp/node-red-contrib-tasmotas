@@ -264,8 +264,8 @@ module.exports = function (RED) {
       return new Promise((resolve, reject) => {
         const pip = spawn('python', ['-m', 'pip', 'install', '--target', pylibsDir, moduleName])
         let stderr = ''
-        pip.stdout.on('data', (data) => this.log(data))
-        pip.stderr.on('data', (data) => { stderr += data; this.warn(data) })
+        pip.stdout.on('data', (data) => this.log(data.toString()))
+        pip.stderr.on('data', (data) => { stderr += data; this.warn(data.toString()) })
         pip.on('error', (err) => reject(err))
         pip.on('exit', (code) => {
           if (code) {
@@ -292,8 +292,8 @@ module.exports = function (RED) {
       return new Promise((resolve, reject) => {
         const pythonProcess = spawn('python', [this.confdir + '/decode-config.py', ...params], { env })
         let stderr = ''
-        pythonProcess.stdout.on('data', (data) => this.log(data))
-        pythonProcess.stderr.on('data', (data) => { stderr += data; this.warn(data) })
+        pythonProcess.stdout.on('data', (data) => this.log(data.toString()))
+        pythonProcess.stderr.on('data', (data) => { stderr += data; this.warn(data.toString()) })
         pythonProcess.on('error', (err) => {
           reject(new Error(`Failed to run decode-config.py - is python installed and on PATH? (${err.message})`))
         })

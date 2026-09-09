@@ -101,6 +101,7 @@ class TasmotaBase {
       case 'DeviceOnline':
         this.setNodeStatus('green', LWT_ONLINE, 'ring')
         this._sendEnableUI(true)
+        this.onDeviceOnline()
         break
       case 'DeviceOffline':
         this.setNodeStatus('red', LWT_OFFLINE, 'ring')
@@ -170,6 +171,10 @@ class TasmotaBase {
 
   onNodeInput (msg) {
     // Subclasses can override to receive input messagges from NodeRed
+  }
+
+  onDeviceOnline () {
+    // Subclasses can override to react when the device comes online (e.g. tasmota_light.js requests the current State)
   }
 
   setNodeStatus (fill, text, shape) {
