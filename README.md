@@ -55,7 +55,7 @@ RF (433 MHz) devices follow a similar pattern: an **RF Bridge** node represents 
 | --- | --- | --- |
 | MQTT Broker | `tasmota-mqtt-broker` | The MQTT broker connection shared by all devices |
 | Device | `tasmota-device` | A single Tasmota device, referenced by the flow nodes above |
-| Manager | `tasmota-manager` | Optional project-wide device management (discovery, device database, config cache) |
+| Manager | `tasmota-manager` | Optional project-wide device management (discovery, device database, config cache) - includes the AP-fallback recovery assistant, see the [recovery guide](./docu/recovery_device.md) |
 | RF Manager | `tasmota-rf-manager` | Optional grouping of RF Bridge/RF Device nodes; tracks RF codes and timings |
 
 ## Example flows

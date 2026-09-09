@@ -1,4 +1,6 @@
 # TODOs:
+ - Manager GUI: a network scan that lists Tasmota devices found on the network but not yet represented by a (or represented by a disabled) `tasmota-device` node, with a one-click option to insert them into the flow - similar to the device-discovery flow in the Tuya project
+ - Manager GUI: a button to freshly save/backup all cached configs (`resources/<project>/`) to a separate backup folder - a node package update deletes and recreates the whole package folder including `resources/`, so being able to restore it afterward would avoid losing the device database, cached configs and RF codes on every update
 
 # v2.3.0
  - Added: new "Devices" tab in the tasmota-manager editor, listing every currently registered device with its name, online/offline status, WiFi access point and IP address
@@ -6,6 +8,10 @@
  - Fixed: the Devices tab's table columns didn't line up with their headers
  - Fixed: the Devices tab's AP column was always empty for any access point that isn't itself a tracked device - now falls back to showing its WiFi BSSID/MAC when the hostname can't be resolved
  - Fixed: a device never requested its WiFi/AP info (STATUS 11) whenever the optional device-config download (requires python + decode-config.py) failed or wasn't set up - very common without a dbUri configured, and silently broke AP tracking for everyone in that situation
+ - Fixed: a node could get stuck showing "Offline" forever after a deploy/restart even though the device was online, and a device's own onDeviceOnline hook (e.g. tasmota-light requesting its current state) was never actually invoked
+ - Fixed: tasmota-rf-bridge never subscribed to its device's "stat" MQTT topic, so every stat/<topic>/STATUSx response (used by the Devices tab's AP/IP columns) was silently dropped without any log or error
+ - Fixed: a WiFi scan could fail with "Invalid exchange" when it collided with wpa_supplicant's own background scan - now retried a few times before giving up
+ - Fixed: decode-config.py's own console output was logged as a raw byte array instead of readable text
 
 # v2.2.0
  - Fixed: tasmota-device and tasmota-manager nodes failed to load entirely (missing dependency)
