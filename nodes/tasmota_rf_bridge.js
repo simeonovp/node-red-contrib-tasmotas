@@ -23,6 +23,7 @@ module.exports = function (RED) {
 
       // register topic in tasmota device
       this.mqttSubscribeTele('RESULT', onRfReceive)
+      this.mqttSubscribeStat('RESULT', onRfReceive)
 
       this.on('input', (msg, send, done) => {
         const bridge = this.deviceNode?.config.device
